@@ -350,13 +350,17 @@ class AkkpsBrowserWindow:
                     parent=self.window
                 ):
                     reopened = self.operator.reopen_plot_map_after_upload(record_id)
-                    self.status.set("AKKPS Plot page re-opened. Exact polygon persistence still needs visual confirmation.")
+                    fingerprint = bool(reopened.get("rendered_polygon_fingerprint_matches"))
+                    fingerprint_text = ("Pre-save/reopen SVG geometry fingerprint MATCHED (supporting evidence only)." if fingerprint
+                                        else "No matching pre-save/reopen SVG geometry fingerprint was available.")
+                    self.status.set("AKKPS Plot page re-opened. Polygon persistence remains unverified.")
                     self._show({"upload": result, "reopen_verification": reopened})
                     messagebox.showinfo(
                         "Plot map re-opened",
                         "Same Plot page reloaded. Map count: " + str(reopened.get("map_count_after_reload")) +
                         "\\nVisible vector-layer hints: " + str(reopened.get("visible_vector_layer_hints_after_reload")) +
-                        "\\n\\nThese hints do not prove the uploaded polygon is the one displayed. Visually compare the boundary before marking it complete.",
+                        "\\n" + fingerprint_text +
+                        "\\n\\nThe fingerprint is not tied independently to the server Record ID. Visually compare the exact Plot boundary before marking it complete.",
                         parent=self.window
                     )
                 else:
