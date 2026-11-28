@@ -1591,7 +1591,8 @@ class AkkpsRunnerActivity : Activity() {
                   const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary|map|maps|kml)\b/i.test(path);
                   const documentUpload=/\b(document|documents|attachment|attachments|upload|file|files)\b/i.test(path);
                   const documentId=parsed?.documentId||parsed?.fileId||parsed?.attachmentId||
-                    data?.documentId||data?.fileId||data?.attachmentId||'';
+                    data?.documentId||data?.fileId||data?.attachmentId||
+                    parsed?.document?.id||parsed?.file?.id||data?.document?.id||data?.file?.id||'';
                   const success=(recordWrite||documentUpload)&&(parsed?.success===true||parsed?.ok===true||data?.success===true||['success','created','saved','uploaded','ok'].includes(state)||/saved successfully|submitted successfully|record created|uploaded successfully/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
