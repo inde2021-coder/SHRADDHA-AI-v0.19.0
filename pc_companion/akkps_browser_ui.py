@@ -32,6 +32,10 @@ class AkkpsBrowserWindow:
         ttk.Button(bar, text="Open Runner", command=self.open_runner).pack(side="left", padx=6)
         ttk.Button(bar, text="Inspect Current Page", command=self.inspect).pack(side="left")
         ttk.Button(bar, text="Close Browser", command=self.close_browser).pack(side="left", padx=6)
+        modules = ttk.Frame(root); modules.pack(fill="x", pady=(4, 0))
+        ttk.Label(modules, text="Runner modules:").pack(side="left")
+        for label in ("Farmers", "Plots", "AWD Reports", "Profile", "Data Sync"):
+            ttk.Button(modules, text=label, command=lambda name=label: self.open_module(name)).pack(side="left", padx=3)
         ttk.Label(root, textvariable=self.status, foreground="#146c43").pack(anchor="w", pady=8)
         form = ttk.LabelFrame(root, text="Reviewed form entry", padding=8); form.pack(fill="x", pady=(0, 8))
         ttk.Label(form, text="Exact field label").grid(row=0, column=0, sticky="w")
@@ -67,6 +71,14 @@ class AkkpsBrowserWindow:
             self._show(inventory.__dict__)
         except Exception as exc:
             messagebox.showerror("Cannot open Runner", str(exc), parent=self.window)
+
+    def open_module(self, module):
+        try:
+            inventory = self.operator.open_module(module)
+            self.status.set(module + " module opened. Inspect the page to map visible fields.")
+            self._show(asdict(inventory))
+        except Exception as exc:
+            messagebox.showerror("Cannot open AKKPS module", str(exc), parent=self.window)
 
     def inspect(self):
         try:
