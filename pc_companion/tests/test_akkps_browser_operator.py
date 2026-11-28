@@ -33,6 +33,7 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
 
     def test_runner_navigation_allows_login_and_runner_only(self):
         for url in ("https://www.akkps.ngo/", "https://www.akkps.ngo/login",
+                    "https://www.akkps.ngo/auth/otp", "https://www.akkps.ngo/auth/verify",
                     "https://www.akkps.ngo/runner", "https://www.akkps.ngo/runner/farmers"):
             with self.subTest(url=url):
                 self.assertEqual(validate_runner_url(url), url)
