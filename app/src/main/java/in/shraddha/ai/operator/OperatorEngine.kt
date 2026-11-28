@@ -76,6 +76,7 @@ class OperatorEngine(
             }
             OperatorActionType.BACK -> ShraddhaAccessibilityService.goBack()
             OperatorActionType.HOME -> ShraddhaAccessibilityService.goHome()
+            // Scroll is allowed only after this step's fresh observation proves a scrollable surface.
             OperatorActionType.SCROLL_FORWARD -> before.elements.any { it.scrollable } &&
                 ShraddhaAccessibilityService.scrollForward()
             OperatorActionType.SCROLL_BACKWARD -> before.elements.any { it.scrollable } &&
