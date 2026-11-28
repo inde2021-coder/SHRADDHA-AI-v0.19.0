@@ -756,7 +756,7 @@ class AkkpsRunnerActivity : Activity() {
               else if(path.startsWith('/runner/awd-reports')||path==='/awd-reports/new') module='AWD_REPORTS';
               else if(path==='/runner/profile') module='PROFILE';
               else if(path==='/runner/sync') module='SYNC';
-              return JSON.stringify({title:document.title,module,forms,tables,actions,navigation,fields});
+              return JSON.stringify({title:document.title,module,path:location.pathname,forms,tables,actions,navigation,fields});
             })()
         """.trimIndent()
         web.evaluateJavascript(js) { raw ->
@@ -780,6 +780,30 @@ class AkkpsRunnerActivity : Activity() {
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
             val module = route?.module?.name ?: obj.optString("module")
+            val safeInventory = JSONObject().put("title", module)
+                .put("path", obj.optString("path"))
+                .put("actions", JSONArray().apply {
+                    for (i in 0 until actions.length()) put(JSONObject().put("label", actions.optString(i)))
+                })
+                .put("forms", obj.optJSONArray("forms") ?: JSONArray())
+                .put("tables", obj.optJSONArray("tables") ?: JSONArray())
+                .put("fields", fields)
+                .put("modules", JSONArray().apply {
+                    for (i in 0 until navigationItems.length()) {
+                        val item = navigationItems.optJSONObject(i) ?: continue
+                        val targetModule = runCatching { AkkpsRunnerModule.valueOf(item.optString("module")) }.getOrNull() ?: continue
+                        val targetPath = when (targetModule) {
+                            AkkpsRunnerModule.HOME -> "/runner"
+                            AkkpsRunnerModule.FARMERS -> "/runner/farmers"
+                            AkkpsRunnerModule.PLOTS -> "/runner/plots"
+                            AkkpsRunnerModule.AWD_REPORTS -> "/runner/awd-reports"
+                            AkkpsRunnerModule.PROFILE -> "/runner/profile"
+                            AkkpsRunnerModule.SYNC -> "/runner/sync"
+                        }
+                        put(JSONObject().put("label", item.optString("label")).put("path", targetPath))
+                    }
+                })
+            runCatching { AkkpsPageInventory.save(this, safeInventory) }
             val capabilities = AkkpsPageCapabilityDiscovery.discover(
                 formCount = forms,
                 tableCount = tables,
