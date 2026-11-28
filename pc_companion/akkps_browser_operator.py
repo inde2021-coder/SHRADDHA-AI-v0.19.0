@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 import json
 import re
 
-ALLOWED_HOSTS = {"www.akkps.ngo", "akkps.ngo", "www.akps.ngo", "akps.ngo"}
+ALLOWED_HOSTS = {"www.akkps.ngo", "akkps.ngo"}
 DEFAULT_HOME = "https://www.akkps.ngo"
 RUNNER_PATH = "/runner"
 SENSITIVE_TYPES = {"password", "hidden", "file"}
