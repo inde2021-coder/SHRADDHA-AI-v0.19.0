@@ -37,7 +37,10 @@ class OperatorEngine(
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
     fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
         if (cancelled) { record("operator_action", "cancelled", step); return false }
-        val safety = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value, step.expectedVisibleText)
+        val safety = OperatorSafetyPolicy.assess(
+            step.action.name, step.target, step.value, step.expectedVisibleText,
+            step.explicitlyAuthorizedByUser
+        )
         if (safety.risk == OperatorSafetyPolicy.Risk.BLOCK) {
             emit(OperatorEvent(OperatorTaskState.FAILED, safety.reason)); record("operator_action", "blocked", step); return false
         }
