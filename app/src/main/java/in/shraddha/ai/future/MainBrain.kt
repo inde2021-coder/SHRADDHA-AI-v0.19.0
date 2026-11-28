@@ -97,7 +97,9 @@ class MainBrain(
             fun recordResult(result: JSONObject): JSONObject {
                 val status = result.optString("status", "unknown").lowercase()
                 val state = when (status) {
-                    "success", "queued" -> `in`.shraddha.ai.operator.CommandStepState.SUCCEEDED
+                    "success" -> `in`.shraddha.ai.operator.CommandStepState.SUCCEEDED
+                    // Queue acceptance is not proof that the external job completed.
+                    "queued" -> `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
                     "needs_user_action", "confirmation_required", "needs_clarification" ->
                         `in`.shraddha.ai.operator.CommandStepState.BLOCKED
                     // A tool-level error can occur after a remote/device side effect has begun.
