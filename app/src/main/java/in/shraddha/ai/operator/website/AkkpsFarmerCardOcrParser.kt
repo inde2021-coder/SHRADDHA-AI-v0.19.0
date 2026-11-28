@@ -37,7 +37,10 @@ object AkkpsFarmerCardOcrParser {
                 val value = line.substring(alias.length).trim().trimStart(':', '-', '—', '|').trim()
                     .replace(Regex("[;=\\r\\n\\u0000-\\u001F]"), " ")
                     .replace(Regex("\\s+"), " ").trim()
-                if (value.length in 2..100 && !value.contains(Regex("(?i)aadhaar|aadhar|आधार|otp|पासवर्ड|password"))) {
+                val digitsOnlyOrSeparated = value.all { it.isDigit() || it.isWhitespace() || it == '-' }
+                val looksLikeAadhaar = digitsOnlyOrSeparated && value.count { it.isDigit() } == 12
+                if (value.length in 2..100 && !looksLikeAadhaar &&
+                    !value.contains(Regex("(?i)aadhaar|aadhar|आधार|otp|पासवर्ड|password"))) {
                     found[key] = value
                 }
             }
