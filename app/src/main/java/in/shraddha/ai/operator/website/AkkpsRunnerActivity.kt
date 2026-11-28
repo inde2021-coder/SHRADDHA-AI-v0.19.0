@@ -1424,7 +1424,7 @@ Return exact JSON only. Do not include prose or markdown."""
             return
         }
         submitVerificationPending = true
-        val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
+        val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second).put("booleanValue", AkkpsRunnerFieldPolicy.parseExplicitBoolean(it.second) ?: JSONObject.NULL)) } }
         val js = """
             (function(expected){
               const eventStart=window.__akkpsSubmitSequence||0;
@@ -1437,6 +1437,17 @@ Return exact JSON only. Do not include prose or markdown."""
               const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
                 getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const checkboxEditable=e=>e.type==='checkbox'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!(e.closest('label')||e.parentElement)?.getClientRects().length;
+              const switchEditable=e=>['switch','checkbox'].includes(e.getAttribute('role'))&&
+                e.getAttribute('aria-disabled')!=='true'&&e.getAttribute('disabled')===null&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const controlLabel=e=>{
+                const ids=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean);
+                const labelled=ids.map(id=>document.getElementById(id)?.innerText||'').join(' ');
+                const parent=e.closest('label');
+                return [e.getAttribute('aria-label'),labelled,parent?.innerText,e.name,e.id].map(norm);
+              };
               const radioGroups=scope=>{
                 const groups=[];
                 for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
@@ -1452,7 +1463,10 @@ Return exact JSON only. Do not include prose or markdown."""
               };
               const forms=[...document.forms].filter(f=>
                 [...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value)||
-                radioGroups(f).some(g=>g.some(r=>r.checked))
+                radioGroups(f).some(g=>g.some(r=>r.checked))||
+                [...f.querySelectorAll('input[type=checkbox]')].some(e=>checkboxEditable(e)&&e.checked)||
+                [...f.querySelectorAll('[role=switch],[role=checkbox]')].some(e=>switchEditable(e)&&
+                  (e.getAttribute('aria-checked')==='true'||e.getAttribute('aria-pressed')==='true'))
               );
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
@@ -1465,6 +1479,27 @@ Return exact JSON only. Do not include prose or markdown."""
                     .map(norm).some(x=>x && x===key);
                 });
                 if(matches.length===0){
+                  const checkboxMatches=[...f.querySelectorAll('input[type=checkbox]')].filter(e=>{
+                    if(!checkboxEditable(e)) return false;
+                    const labels=[...(e.labels||[])].map(x=>x.innerText); const parent=e.closest('label'); if(parent) labels.push(parent.innerText);
+                    return [e.name,e.id,e.getAttribute('aria-label'),...labels].map(norm).some(x=>x && x===key);
+                  });
+                  if(checkboxMatches.length>0){
+                    if(checkboxMatches.length!==1||item.booleanValue===null||
+                      checkboxMatches[0].checked!==(item.booleanValue===true))
+                      return JSON.stringify({status:'field_changed',field:item.key});
+                    continue;
+                  }
+                  const switchMatches=[...f.querySelectorAll('[role=switch],[role=checkbox]')]
+                    .filter(switchEditable).filter(e=>controlLabel(e).some(x=>x && x===key));
+                  if(switchMatches.length>0){
+                    if(switchMatches.length!==1||item.booleanValue===null)
+                      return JSON.stringify({status:'field_changed',field:item.key});
+                    const state=switchMatches[0].getAttribute('aria-checked')??switchMatches[0].getAttribute('aria-pressed');
+                    if(state!==(item.booleanValue===true?'true':'false'))
+                      return JSON.stringify({status:'field_changed',field:item.key});
+                    continue;
+                  }
                   const groups=radioGroups(f).filter(g=>{
                     const labels=groupLabel(g);
                     return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
