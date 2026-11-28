@@ -1,5 +1,7 @@
 package `in`.shraddha.ai.accessibility
 
+import `in`.shraddha.ai.operator.FilePickerPackagePolicy
+
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Bundle
@@ -203,6 +205,9 @@ class ShraddhaAccessibilityService : AccessibilityService() {
 
     private fun selectFileInPicker(fileName: String): Boolean {
         if (fileName.isBlank()) return false
+        val pickerRoot = rootInActiveWindow ?: return false
+        val pickerPackage = pickerRoot.packageName?.toString().orEmpty()
+        if (!FilePickerPackagePolicy.allows(pickerPackage)) return false
         if (clickVisibleText(fileName)) return true
         // Common Android DocumentsUI search flow. Only interacts with a visible search control.
         val openedSearch = clickVisibleText("Search") || clickVisibleText("Search files") || clickVisibleText("Search in")
