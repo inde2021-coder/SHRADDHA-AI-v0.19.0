@@ -65,6 +65,7 @@ class AkkpsBrowserWindow:
         ttk.Button(workflows, text="Upload attached document…", command=self.upload_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
         ttk.Button(workflows, text="Attach boundary KML…", command=self.attach_boundary_kml).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Upload boundary to AKKPS…", command=self.upload_boundary_kml).pack(side="left", padx=3)
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
@@ -278,6 +279,45 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Boundary KML attachment blocked", str(exc), parent=self.window)
+
+    def upload_boundary_kml(self):
+        try:
+            label = simpledialog.askstring(
+                "Upload AKKPS Plot boundary",
+                "Exact visible non-submit Upload/Save Boundary button label:",
+                parent=self.window
+            )
+            if not label: return
+            preview = {
+                "button": label,
+                "action": "Upload the selected KML boundary only",
+                "record_submit": False,
+                "server_confirmation": "A 2xx same-origin response with explicit success and a record ID is required"
+            }
+            if not messagebox.askyesno(
+                "Confirm AKKPS boundary upload",
+                "This action may update the selected Plot boundary on AKKPS. It will not submit the whole Plot form.\\n\\n" +
+                json.dumps(preview, ensure_ascii=False, indent=2),
+                parent=self.window
+            ): return
+            result = self.operator.upload_boundary_kml_after_confirmation(label)
+            if result.get("boundary_upload_verified"):
+                self.status.set("AKKPS boundary upload response verified • Record ID: " + str(result.get("record_id")))
+                messagebox.showinfo(
+                    "Boundary response verified",
+                    "AKKPS returned success and a record ID. Re-open the Plot map to confirm the polygon is visible.",
+                    parent=self.window
+                )
+            else:
+                self.status.set("Boundary upload outcome UNCERTAIN. Do not retry until the Plot map is checked.")
+                messagebox.showwarning(
+                    "Verify Plot boundary",
+                    "The request may have reached AKKPS, but a successful response with a record ID was not verified. Re-open the Plot map before any retry.",
+                    parent=self.window
+                )
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Boundary upload blocked", str(exc), parent=self.window)
 
     def submit(self):
         if not messagebox.askyesno("Confirm AKKPS submission",
