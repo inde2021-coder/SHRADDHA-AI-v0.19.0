@@ -33,7 +33,9 @@ class AkkpsObservedModuleInventoryCodecTest {
             mapOf("OBSERVE_PAGE" to CapabilityState.AVAILABLE)
         )
         val candidates = (1..40).map { index ->
-            AkkpsObservedRunnerRoute("Module $index", "/runner/module-$index")
+            val suffix = if (index <= 26) ('A'.code + index - 1).toChar().toString()
+                else "A${('A'.code + index - 27).toChar()}"
+            AkkpsObservedRunnerRoute("Module $suffix", "/runner/module-$index")
         }
         val merged = AkkpsObservedModuleInventoryCodec.mergeObserved(
             mapOf(existingRoute.path to existing), candidates, 1_795_824_000_000L
