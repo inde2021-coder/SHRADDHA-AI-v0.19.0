@@ -1231,14 +1231,14 @@ class AkkpsRunnerActivity : Activity() {
                     .setPositiveButton("AKKPS पर Upload करें") { _, _ ->
                         val script = """
                             (() => {
-                              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\\s+/g,' ').trim();
+                              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
                               const visible=e=>!!(e && e.getClientRects().length &&
                                 getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' &&
                                 !e.closest('[hidden],[aria-hidden="true"]'));
                               const forms=[...document.querySelectorAll('form')].filter(visible);
                               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
                               const files=[...forms[0].querySelectorAll('input[type=file]')].filter(e=>e.files&&e.files.length)
-                                .flatMap(e=>[...e.files].map(f=>f.name)).filter(n=>/\\.kml$/i.test(n));
+                                .flatMap(e=>[...e.files].map(f=>f.name)).filter(n=>/\.kml$/i.test(n));
                               if(files.length!==1 || !files[0].toLowerCase().includes(__PLOT_ID__.toLowerCase()))
                                 return JSON.stringify({status:'kml_not_attached'});
                               const polygonPaths=[...document.querySelectorAll('.leaflet-overlay-pane svg path,.ol-overlaycontainer svg path,svg path[data-geometry-type*="polygon" i],svg path[data-layer-type*="polygon" i]')]
@@ -1247,7 +1247,7 @@ class AkkpsRunnerActivity : Activity() {
                                   const fill=(e.getAttribute('fill')||getComputedStyle(e).fill||'').trim();
                                   return d.length>8 && fill && fill!=='none' && fill!=='transparent';
                                 }).map(e=>({
-                                  d:(e.getAttribute('d')||'').replace(/\\s+/g,' ').trim(),
+                                  d:(e.getAttribute('d')||'').replace(/\s+/g,' ').trim(),
                                   cls:String(e.getAttribute('class')||'').trim(),
                                   fillRule:e.getAttribute('fill-rule')||'',
                                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
@@ -1451,7 +1451,7 @@ class AkkpsRunnerActivity : Activity() {
                   const fill=(e.getAttribute('fill')||getComputedStyle(e).fill||'').trim();
                   return d.length>8 && fill && fill!=='none' && fill!=='transparent';
                 }).map(e=>({
-                  d:(e.getAttribute('d')||'').replace(/\\s+/g,' ').trim(),
+                  d:(e.getAttribute('d')||'').replace(/\s+/g,' ').trim(),
                   cls:String(e.getAttribute('class')||'').trim(),
                   fillRule:e.getAttribute('fill-rule')||'',
                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
