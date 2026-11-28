@@ -22,7 +22,9 @@ object AkkpsObservedRunnerRoutePolicy {
     private val deniedSegments = setOf("admin", "coordinator", "superadmin", "login", "logout")
 
     fun validate(label: String, rawUrl: String, currentUrl: String): AkkpsObservedRunnerRoute? {
-        if (label.isBlank() || label.length > 100 || rawUrl.isBlank() || rawUrl.length > 2048 ||
+        if (label.isBlank() || label.length > 80 || label.any { it.isDigit() } ||
+            !label.matches(Regex("[\\\\p{L}\\\\p{M}\\\\s&()/._-]+")) ||
+            rawUrl.isBlank() || rawUrl.length > 2048 ||
             !AkkpsWebsiteProfile.acceptsUrl(currentUrl)) return null
         return runCatching {
             val current = URI(currentUrl)
