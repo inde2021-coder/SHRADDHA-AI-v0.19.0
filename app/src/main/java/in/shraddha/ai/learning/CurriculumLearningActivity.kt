@@ -162,6 +162,10 @@ class CurriculumLearningActivity : Activity() {
             append("  •  ${(completed * 100 / 700)}%")
             append("\nअध्ययन समय: ${s.usedTodayMinutes} / ${s.dailyLimitMinutes} मिनट")
             append("\nGuardian Mode: ${if (s.guardianMode) "चालू" else "बंद"}")
+            if (s.guardianOverrideUntilMillis > System.currentTimeMillis()) {
+                val minutesLeft = ((s.guardianOverrideUntilMillis - System.currentTimeMillis()) / 60_000L).coerceAtLeast(1L)
+                append("\nअभिभावक की अतिरिक्त अनुमति: लगभग $minutesLeft मिनट शेष")
+            }
             if (learningLocked) append("\nआज की समय सीमा पूरी — अभिभावक PIN आवश्यक")
         }
     }
