@@ -1333,7 +1333,7 @@ class AkkpsRunnerActivity : Activity() {
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (result?.optBoolean("verified") == true) {
                 pendingDocumentUploadFieldLabel = null
-                status.text = "AKKPS document upload server response verified • Document ID: "
+                status.text = "AKKPS document upload server response verified • Document ID: " +
                     result.optString("documentId") + " • HTTP " + result.optInt("httpStatus")
             } else {
                 status.text = "Document picker attachment portal upload नहीं है। पिछले 15 मिनट में explicit success + Document ID वाला upload response नहीं मिला; AKKPS पर manually जाँचें।"
