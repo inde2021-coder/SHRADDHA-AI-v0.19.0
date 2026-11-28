@@ -42,6 +42,27 @@ class CommandExecutionJournalInstrumentedTest {
         assertNull(journal.markRunning(created.id, "step-1"))
     }
 
+    @Test fun processRestartConvertsRunningStepToUncertainWithoutReplaying() {
+        val created = requireNotNull(plan())
+        assertEquals(CommandStepState.RUNNING, requireNotNull(journal.markRunning(created.id, "step-1")).state)
+
+        // A new journal instance simulates a fresh process reading the durable store.
+        val restarted = CommandExecutionJournal(context)
+        assertTrue(restarted.recoverInterruptedSteps())
+        assertEquals(CommandStepState.UNCERTAIN, requireNotNull(restarted.get(created.id)).steps.single().state)
+        assertNull(restarted.markRunning(created.id, "step-1"))
+    }
+
+    @Test fun deduplicationDoesNotReuseAPlanWithDifferentActions() {
+        val first = requireNotNull(plan())
+        val incompatible = journal.createPlan(
+            "send private message to +919876543210",
+            listOf(CommandTaskStep("step-1", "messaging", "delete"))
+        )
+        assertNull(incompatible)
+        assertEquals("send", requireNotNull(journal.get(first.id)).steps.single().action)
+    }
+
     @Test fun uncertainSideEffectCannotBeRetriedUntilIndependentReconciliation() {
         val created = requireNotNull(plan())
         journal.markRunning(created.id, "step-1")
