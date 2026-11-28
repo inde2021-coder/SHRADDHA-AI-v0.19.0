@@ -26,9 +26,10 @@ data class CommandTaskPlan(
     val steps: List<CommandTaskStep>
 ) {
     val isTerminal: Boolean
-        get() = steps.all { it.state in setOf(
-            CommandStepState.SUCCEEDED, CommandStepState.BLOCKED, CommandStepState.SKIPPED
-        ) }
+        get() = steps.all { step ->
+            step.state in setOf(CommandStepState.SUCCEEDED, CommandStepState.BLOCKED, CommandStepState.SKIPPED) ||
+                (step.state == CommandStepState.FAILED && step.attempt >= 2)
+        }
 }
 
 /**
@@ -115,7 +116,7 @@ class CommandExecutionJournal(context: Context) {
         updateStep(planId, stepId) { step ->
             when (step.state) {
                 CommandStepState.PENDING, CommandStepState.FAILED ->
-                    if (step.attempt < maxAttempts.coerceIn(1, 3)) step.copy(
+                    if (step.attempt < maxAttempts.coerceIn(1, 2)) step.copy(
                         state = CommandStepState.RUNNING, attempt = step.attempt + 1,
                         resultCode = "", updatedAt = System.currentTimeMillis()
                     ) else null
