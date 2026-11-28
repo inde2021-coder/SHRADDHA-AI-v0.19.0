@@ -272,7 +272,7 @@ class AkkpsRunnerActivity : Activity() {
         val raw = pendingAiCommand ?: return
         val route = AkkpsRunnerRouteCatalog.match(url) ?: return // wait until login reaches Runner
         val targetModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
-        if (targetModule != null && raw.contains('=') && !route.isCreateRoute) {
+        if (targetModule != null && raw.contains('=') && (route.module != targetModule || !route.isCreateRoute)) {
             val targetRoute = AkkpsRunnerCreateCommandPolicy.route(targetModule) ?: return
             if (route.module != targetModule || route.path != targetRoute) {
                 status.text = "${targetModule.label} form खोला जा रहा है; उसके बाद command execute होगी।"
