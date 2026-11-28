@@ -124,6 +124,14 @@ class ProtocolTests(unittest.TestCase):
 
 
 class AkkpsProtocolTests(unittest.TestCase):
+    def test_akkps_module_actions_are_exactly_allowlisted(self):
+        from pc_companion.protocol import validate_remote_action
+        for module in ("farmers", "plots", "awd reports", "profile", "data sync"):
+            self.assertEqual(validate_remote_action({"kind": "akkps_module", "module": module}),
+                             {"kind": "akkps_module", "module": module})
+        self.assertIsNone(validate_remote_action({"kind": "akkps_module", "module": "admin"}))
+        self.assertIsNone(validate_remote_action({"kind": "akkps_module", "module": "farmers", "url": "https://evil.example"}))
+
     def test_akkps_actions_are_argument_free_and_allowlisted(self):
         from pc_companion.protocol import validate_remote_action
         for kind in ("akkps_open", "akkps_runner", "akkps_inspect"):
