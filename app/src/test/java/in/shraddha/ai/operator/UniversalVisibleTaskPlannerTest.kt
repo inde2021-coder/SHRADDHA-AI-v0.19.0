@@ -89,6 +89,32 @@ class UniversalVisibleTaskPlannerTest {
         assertTrue(result.steps[2].requiresRuntimeTargetResolution)
     }
 
+
+    @Test fun acceptsExactUserNamedFileSelectionAndReverseScroll() {
+        val json = """{"steps":[
+            {"action":"SELECT_FILE","target":"invoice.pdf"},
+            {"action":"SCROLL_BACKWARD"}
+        ]}"""
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "attach invoice.pdf and scroll back", snapshot
+        )
+        assertNull(result.error)
+        assertEquals(OperatorActionType.SELECT_FILE, result.steps[0].action)
+        assertTrue(result.steps[1].action == OperatorActionType.SCROLL_BACKWARD)
+    }
+
+    @Test fun rejectsInventedOrUnmentionedFileSelection() {
+        val json = """{"steps":[{"action":"SELECT_FILE","target":"secret.pdf"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(json, "attach invoice.pdf", snapshot).error
+        )
+        val empty = """{"steps":[{"action":"SELECT_FILE","target":""}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(empty, "attach a file", snapshot).error
+        )
+    }
+
+
     @Test fun rejectsTrailingContentAfterAValidPlan() {
         val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Search"}]}"""
         assertNotNull(
