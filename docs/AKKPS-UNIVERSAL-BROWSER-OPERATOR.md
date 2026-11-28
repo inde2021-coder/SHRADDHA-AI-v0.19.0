@@ -30,6 +30,21 @@ From the paired Android PC command surface, these commands are supported:
 
 Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. The Windows operator reports server verification only when it observes an approved-origin POST/PUT/PATCH response with a 2xx status, an explicit success indicator and a record ID. Otherwise the result remains uncertain and the operator warns against retrying until the record list is checked.
 
+## Page-specific AWD, autocomplete and document workflows
+
+The Windows operator now exposes four reviewed page actions in addition to ordinary field entry:
+
+- **Repeated AWD entries:** add one blank row only for the recognized drying-event, re-flooding, fertilizer-application, field-visit, historical-yield or water-reading sections. The operator requires the exact visible Add button and verifies that the form gained fields. It does not generate dates, quantities or observations; the user enters each row's values and reviews them.
+- **Autocomplete:** fill a user-provided search phrase into one exact visible field, then select only one exact visible ARIA option. Ambiguous/missing suggestions are rejected. The chosen option must disappear and the field must remain non-empty. Sites that do not expose accessible options remain manual-only.
+- **Documents:** the user chooses a local PDF/JPG/JPEG/PNG (maximum 10 MB) and confirms the exact upload field. Shraddha attaches it to the current form and verifies that one file is selected. This is only file selection; it does not claim the portal has uploaded or stored the document. The portal's own upload/submit step remains separate.
+- **Map inspection:** the Windows operator reports visible map surfaces and boundary/drawing controls only. It does not read coordinates or alter map geometry. A page-specific drawing/save adapter must not be enabled until the live authorized Runner map, its controls and its save response are verified.
+
+## Boundary workflow and limits
+
+On Android, the existing Runner workspace supports KML import/export, GeoJSON satellite-candidate import, local encrypted boundary save/reopen, and GPS edge-walking. GPS walk requires a valid Plot ID and precise-location permission, rejects inaccurate/stale/duplicate/jump fixes, checkpoints drafts, and requires geometry validation before local save. The accepted field workflow is satellite candidate first; if no usable candidate is available, walk the field's outer bund/edge without entering the crop. Candidate geometry is reviewed before it replaces the editor points.
+
+**Important:** Android boundary save currently means encrypted local save, not an AKKPS server update. KML/GeoJSON import also does not prove that the AKKPS map overlay has changed. Do not report a boundary as uploaded or saved on the portal until the official Runner map endpoint and a successful server response/record identifier are verified on the authorized account. Existing portal polygons must be preserved; overlap checks and Save→Reopen on the live map remain part of that verification.
+
 ## Main Brain data-entry sequence
 
 1. Call `inspect_akkps_runner`; the user signs in if prompted.
