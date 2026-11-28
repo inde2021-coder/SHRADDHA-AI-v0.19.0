@@ -227,7 +227,6 @@ class SkillPackLifecycleManager(context: Context) {
         val target = File(targetDir, "${pack.version}.pack")
         if (target.exists()) throw IllegalStateException("This pack version is already installed.")
         val previous = readState().optJSONObject(pack.packId)?.optString("current", "").orEmpty()
-        val targetMetadata = File(target.parentFile, target.name + ".json")
         check(pack.file.renameTo(target)) { "Could not atomically move the approved pack into installed storage." }
         if (!sourceMetadata.renameTo(targetMetadata)) {
             target.renameTo(pack.file)
