@@ -12,7 +12,14 @@ object PcCommandInterpreter {
         require(command.length <= 500) { "Command बहुत लंबा है।" }
         val lower = command.lowercase()
 
+        val akkpsModules = mapOf(
+            "open akkps farmers" to "farmers", "open akkps plots" to "plots",
+            "open akkps awd reports" to "awd reports", "open akkps profile" to "profile",
+            "open akkps data sync" to "data sync", "akkps किसान खोलो" to "farmers",
+            "akkps प्लॉट खोलो" to "plots", "akkps एडब्ल्यूडी रिपोर्ट खोलो" to "awd reports"
+        )
         when {
+            lower in akkpsModules -> JSONObject().put("kind", "akkps_module").put("module", akkpsModules.getValue(lower))
             lower in setOf("open akkps", "open terramark", "akkps खोलो", "टेरामार्क खोलो") ->
                 JSONObject().put("kind", "akkps_open")
             lower in setOf("open akkps runner", "akkps runner खोलो", "runner खोलो") ->
