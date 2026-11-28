@@ -93,6 +93,49 @@ def verified_record_response(method: str, url: str, status: int, payload):
     return value[:100] if value and len(value) <= 100 else None
 
 
+def _simple_polygon_ring(ring: list[tuple[float, float]]) -> bool:
+    """Reject zero-area and self-intersecting closed longitude/latitude rings."""
+    if len(ring) < 4 or ring[0] != ring[-1]:
+        return False
+    points = ring[:-1]
+    area_twice = sum(
+        points[i][0] * points[(i + 1) % len(points)][1] -
+        points[(i + 1) % len(points)][0] * points[i][1]
+        for i in range(len(points))
+    )
+    if abs(area_twice) < 1e-12:
+        return False
+
+    def orientation(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+    def on_segment(a, b, p):
+        return (min(a[0], b[0]) - 1e-12 <= p[0] <= max(a[0], b[0]) + 1e-12 and
+                min(a[1], b[1]) - 1e-12 <= p[1] <= max(a[1], b[1]) + 1e-12)
+
+    def intersects(a, b, c, d):
+        o1, o2 = orientation(a, b, c), orientation(a, b, d)
+        o3, o4 = orientation(c, d, a), orientation(c, d, b)
+        if ((o1 > 1e-12 and o2 < -1e-12) or (o1 < -1e-12 and o2 > 1e-12)) and \\
+           ((o3 > 1e-12 and o4 < -1e-12) or (o3 < -1e-12 and o4 > 1e-12)):
+            return True
+        return ((abs(o1) <= 1e-12 and on_segment(a, b, c)) or
+                (abs(o2) <= 1e-12 and on_segment(a, b, d)) or
+                (abs(o3) <= 1e-12 and on_segment(c, d, a)) or
+                (abs(o4) <= 1e-12 and on_segment(c, d, b)))
+
+    count = len(points)
+    for i in range(count):
+        a, b = points[i], points[(i + 1) % count]
+        for j in range(i + 1, count):
+            if j == i or j == (i + 1) % count or i == (j + 1) % count:
+                continue
+            c, d = points[j], points[(j + 1) % count]
+            if intersects(a, b, c, d):
+                return False
+    return True
+
+
 def validate_runner_url(url: str) -> str:
     """Allow only login/root and Runner routes; reject encoded traversal and admin areas."""
     validate_akkps_url(url)
@@ -868,8 +911,10 @@ class AkkpsBrowserOperator:
             if not (-180 <= lon <= 180 and -90 <= lat <= 90):
                 raise ValueError("KML coordinates are outside valid longitude/latitude ranges.")
             ring.append((lon, lat))
-        if len(ring) < 4 or len(ring) > 501 or ring[0] != ring[-1] or len(set(ring[:-1])) < 3:
-            raise ValueError("KML outer ring must be closed and contain 3–500 distinct points.")
+        if len(ring) < 4 or len(ring) > 501 or len(set(ring[:-1])) < 3:
+            raise ValueError("KML outer ring must contain 3–500 distinct points.")
+        if not _simple_polygon_ring(ring):
+            raise ValueError("KML boundary has zero area or self-intersecting edges.")
         validate_runner_url(self.page.url)
         route = urlparse(self.page.url).path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
