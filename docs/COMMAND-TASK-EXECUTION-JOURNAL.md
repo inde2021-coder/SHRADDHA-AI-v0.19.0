@@ -16,6 +16,7 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - FAILED may be retried only within the bounded attempt count.
 - RUNNING may finish as SUCCEEDED, FAILED, UNCERTAIN, BLOCKED or SKIPPED.
 - App startup must call `recoverInterruptedSteps()` before any adapter resumes work. It durably changes every leftover RUNNING step to UNCERTAIN; startup must remain blocked if recovery persistence fails.
+- Corrupt or undecodable journal data makes recovery fail closed; it is never treated as an empty journal. Storage pruning may remove terminal history only and must retain every non-terminal plan, or reject the new write when the protected set cannot fit.
 - UNCERTAIN is never automatically replayed. An adapter independently inspects the remote side effect and calls reconciliation.
 - SUCCEEDED, BLOCKED and SKIPPED are terminal.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
