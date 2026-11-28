@@ -959,10 +959,10 @@ class AkkpsRunnerActivity : Activity() {
                 .filter(visible).map(clean).filter(x=>
                   /(draw|polygon|boundary|vertex|point|undo|clear|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x)
                 ).slice(0,60);
-              const uploads=[...document.querySelectorAll('input[type=file]')].filter(visible).map(e=>({
+              const uploads=[...document.querySelectorAll('input[type=file]')].map(e=>({
                 label:[...(e.labels||[])].map(x=>clean(x)).filter(Boolean).join(' / ') ||
                   e.getAttribute('aria-label') || e.name || e.id || 'unlabelled file input',
-                accept:e.accept||''
+                accept:e.accept||'', visible:visible(e)
               })).slice(0,20);
               const engine=window.L?'leaflet':window.mapboxgl?'mapbox-gl':
                 window.google?.maps?'google-maps':window.ol?'openlayers':
