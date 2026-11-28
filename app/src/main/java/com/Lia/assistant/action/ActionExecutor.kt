@@ -37,7 +37,7 @@ object ActionExecutor {
             "inspect_akkps_runner" -> {
                 val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
                     .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_INSPECT, true)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 context.startActivity(launch)
                 result.put("status", "needs_user_action").put("action", "akkps_runner_inspection_started")
                     .put("message", "AKKPS Runner खुल गया है। Login आप स्वयं करें; authenticated Runner page load होने पर safe module/form inventory अपने आप capture होगी।")
