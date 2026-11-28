@@ -1015,7 +1015,7 @@ class AkkpsRunnerActivity : Activity() {
               const visible=e=>!!(e && e.getClientRects().length &&
                 getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden');
               const clean=e=>String(e?.innerText||e?.getAttribute('aria-label')||e?.title||'')
-                .replace(/\\s+/g,' ').trim().slice(0,90);
+                .replace(/\s+/g,' ').trim().slice(0,90);
               const mapSelector='.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,'+
                 '[data-testid*="map" i],[role=application][aria-label*=map i],[aria-label*=map i]';
               const candidates=[...document.querySelectorAll(mapSelector)].filter(visible);
@@ -1252,7 +1252,8 @@ class AkkpsRunnerActivity : Activity() {
                                   fillRule:e.getAttribute('fill-rule')||'',
                                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
                                 })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
-                              const geometrySignature=polygonPaths.length?JSON.stringify(polygonPaths).slice(0,20000):'';
+                              const rawGeometrySignature=polygonPaths.length?JSON.stringify(polygonPaths):'';
+                              const geometrySignature=rawGeometrySignature.length<=20000?rawGeometrySignature:'';
                               const wanted=norm(__LABEL__);
                               const buttons=[...forms[0].querySelectorAll('button,input[type=button], [role=button]')]
                                 .filter(visible).filter(e=>{
@@ -1455,7 +1456,8 @@ class AkkpsRunnerActivity : Activity() {
                   fillRule:e.getAttribute('fill-rule')||'',
                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
                 })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
-              const geometrySignature=polygonPaths.length?JSON.stringify(polygonPaths).slice(0,20000):'';
+              const rawGeometrySignature=polygonPaths.length?JSON.stringify(polygonPaths):'';
+              const geometrySignature=rawGeometrySignature.length<=20000?rawGeometrySignature:'';
               const layerHints=layerSelectors.reduce((sum,sel)=>sum+
                 [...document.querySelectorAll(sel)].filter(visible).length,0);
               return JSON.stringify({mapCount:roots.length,layerHints,route:location.pathname,geometrySignature,polygonPathCount:polygonPaths.length});
