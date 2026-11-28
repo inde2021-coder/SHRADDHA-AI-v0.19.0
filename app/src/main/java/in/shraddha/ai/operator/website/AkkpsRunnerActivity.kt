@@ -1181,7 +1181,9 @@ class AkkpsRunnerActivity : Activity() {
               };
               const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
               const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
-                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+                const ids=(r.getAttribute('aria-labelledby')||rg?.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean);
+                const labelled=ids.map(id=>document.getElementById(id)?.innerText||'').join(' ');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label'),labelled].map(norm);
               };
               for(const item of items){
                 const key=norm(item.key);
@@ -1460,7 +1462,9 @@ Return exact JSON only. Do not include prose or markdown."""
               };
               const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
               const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
-                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+                const ids=(r.getAttribute('aria-labelledby')||rg?.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean);
+                const labelled=ids.map(id=>document.getElementById(id)?.innerText||'').join(' ');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label'),labelled].map(norm);
               };
               const forms=[...document.forms].filter(f=>
                 [...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value)||
