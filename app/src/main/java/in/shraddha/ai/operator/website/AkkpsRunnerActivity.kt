@@ -858,7 +858,7 @@ class AkkpsRunnerActivity : Activity() {
                         else -> "Autocomplete selection verify नहीं हुई; website पर manually जाँचें।"
                     }
                 }
-            }, 650)
+            }, 1100)
         }
     }
 
