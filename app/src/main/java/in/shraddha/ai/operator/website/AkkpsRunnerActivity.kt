@@ -1220,16 +1220,18 @@ class AkkpsRunnerActivity : Activity() {
                         """.trimIndent()
                             .replace("__PLOT_ID__", JSONObject.quote(plotId))
                             .replace("__LABEL__", JSONObject.quote(label))
+                        pendingBoundaryUploadPreparedAt = System.currentTimeMillis()
+                        pendingBoundaryUploadPlotId = plotId
                         web.evaluateJavascript(script) { raw ->
                             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
                             if (result?.optString("status") == "clicked") {
-                                pendingBoundaryUploadPreparedAt = System.currentTimeMillis()
-                                pendingBoundaryUploadPlotId = plotId
                                 pendingBoundaryReopenRecordId = null
                                 pendingBoundaryReopenPlotId = null
                                 pendingBoundaryReopenUrl = null
                                 status.text = "AKKPS का exact non-submit Boundary Upload button click हुआ। Server response verify करने के लिए ‘verify boundary upload’ बोलें। दोबारा click न करें।"
                             } else {
+                                pendingBoundaryUploadPreparedAt = 0L
+                                pendingBoundaryUploadPlotId = null
                                 status.text = when (result?.optString("status")) {
                                     "form_not_unique" -> "एक visible Plot form नहीं मिला; कोई upload action नहीं हुआ।"
                                     "kml_not_attached" -> "इसी Plot ID की एक KML attachment नहीं मिली; कोई upload action नहीं हुआ।"
