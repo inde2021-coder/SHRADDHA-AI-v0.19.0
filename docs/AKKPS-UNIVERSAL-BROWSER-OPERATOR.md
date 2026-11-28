@@ -5,7 +5,6 @@ Shraddha AI can operate the user's authorized AKKPS/TerraMark account through th
 same web UI a person uses. It supports the two confirmed hosts:
 
 - https://www.akkps.ngo
-- https://www.akps.ngo
 
 The main portal is opened first. After the user signs in manually, **Open Runner**
 navigates to the same host's `/runner` route. Whether both hosts share authentication
