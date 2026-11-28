@@ -44,7 +44,7 @@ object AkkpsPageInventory {
         val actions = page.optJSONArray("actions")?.length() ?: 0
         val forms = page.optJSONArray("forms")?.length() ?: 0
         val tables = page.optJSONArray("tables")?.length() ?: 0
-        val fields = page.optJSONArray("fields") ?: JSONArray()
+        val fields = page.optJSONArray("fieldLabels") ?: page.optJSONArray("fields") ?: JSONArray()
         val required = (0 until fields.length()).count { fields.optJSONObject(it)?.optBoolean("required") == true }
         return "AKKPS पेज: ${page.optString("title").take(80)}\n" +
             "Modules: $modules • Actions: $actions • Forms: $forms • Tables: $tables\n" +
