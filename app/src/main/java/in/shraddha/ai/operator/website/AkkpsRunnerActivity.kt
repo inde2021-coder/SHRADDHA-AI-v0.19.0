@@ -632,10 +632,22 @@ class AkkpsRunnerActivity : Activity() {
         }
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        val recognizersClosed = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun closeRecognizers() {
+            if (recognizersClosed.compareAndSet(false, true)) {
+                latin.close()
+                devanagari.close()
+            }
+        }
         latin.process(input).addOnSuccessListener { latinResult ->
+            if (isFinishing || isDestroyed) {
+                closeRecognizers()
+                return@addOnSuccessListener
+            }
             devanagari.process(input).addOnSuccessListener { devResult ->
+                closeRecognizers()
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devResult.text)
-                latin.close(); devanagari.close()
                 if (!parsed.readyForUserReview) {
                     status.text = "कार्ड से स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या आवाज़ से जानकारी दें।"
                 } else {
@@ -645,12 +657,16 @@ class AkkpsRunnerActivity : Activity() {
                     status.text = "स्थानीय OCR ने ${parsed.assignments.size} candidate fields पहचाने। $missingText। हर मान जाँचें/सुधारें। कोई field स्वतः submit नहीं हुई।"
                 }
             }.addOnFailureListener { error ->
-                latin.close(); devanagari.close()
-                status.text = "Hindi OCR उपलब्ध नहीं: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+                closeRecognizers()
+                if (!isFinishing && !isDestroyed) {
+                    status.text = "Hindi OCR उपलब्ध नहीं: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+                }
             }
         }.addOnFailureListener { error ->
-            latin.close(); devanagari.close()
-            status.text = "OCR नहीं चल पाया: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+            closeRecognizers()
+            if (!isFinishing && !isDestroyed) {
+                status.text = "OCR नहीं चल पाया: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+            }
         }
     }
 
