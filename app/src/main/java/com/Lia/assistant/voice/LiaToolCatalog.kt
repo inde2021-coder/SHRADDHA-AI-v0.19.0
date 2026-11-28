@@ -45,8 +45,8 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "open_akkps_runner",
-                description = "Opens Shraddha AI's dedicated, allow-listed AKKPS Runner workspace. The user signs in directly inside the official HTTPS website; passwords and OTPs stay in the website and are never sent to the AI. After login, use Inspect to discover visible Runner modules and use the reviewed Farmer, Plot and AWD data-entry workflows. Submit always requires explicit user intent and server-side record verification.",
-                params = emptyMap(),
+                description = "Opens Shraddha AI's dedicated, allow-listed AKKPS Runner workspace. The user signs in directly inside the official HTTPS website; passwords and OTPs stay in the website and are never sent to the AI. Optionally pass the exact user-requested Runner command to load after login. The Runner maps only explicit user-provided values, asks for missing information, requires a separate confirmation before Submit, and verifies the server response and record ID.",
+                params = mapOf("command" to "Optional exact user-requested AKKPS Runner command, maximum 3000 characters. Never include passwords, OTPs, PINs or CAPTCHA answers."),
                 required = emptyList()
             )
         )
