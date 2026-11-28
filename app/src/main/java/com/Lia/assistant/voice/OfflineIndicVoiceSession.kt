@@ -115,6 +115,9 @@ class OfflineIndicVoiceSession(
                 onBrainResponse(answer)
                 onStatus("Offline " + language.label + " • Brain response ready")
             } catch (error: Exception) {
+                // A decoder/LLM failure must not leave the microphone recording indefinitely.
+                // Stop first to invalidate queued segments and release AudioRecord, then surface it.
+                stop()
                 onError(error.localizedMessage ?: "Offline speech processing failed.")
             } finally {
                 pcm.fill(0f)
