@@ -88,9 +88,29 @@ object AkkpsFieldAliasCatalog {
         "verifier notes" to "verifierNotes",
         "cultivation cost inr" to "cultivationCostInr", "water saved percent" to "waterSaved",
         "other gender laborers" to "otherGenderLaborers", "total laborers" to "totalLaborers",
-        "male laborers" to "maleLaborers", "female laborers" to "femaleLaborers",
-        "notes" to "notes", "soil type" to "soilType", "soil ph" to "soilPh",
-        "drainage" to "drainage", "irrigation source" to "irrigationSource", "pump type" to "pumpType"
+        "pre season water condition" to "preSeasonWaterCondition", "पूर्व मौसम जल स्थिति" to "preSeasonWaterCondition",
+        "baseline emission factor source" to "baselineEmissionFactorSource", "आधार उत्सर्जन स्रोत" to "baselineEmissionFactorSource",
+        "irrigations season" to "irrigationsPerSeason", "सिंचाई प्रति मौसम" to "irrigationsPerSeason",
+        "crop duration days" to "cropDurationDays", "फसल अवधि दिन" to "cropDurationDays",
+        "historical yields" to "historicalYields", "ऐतिहासिक उपज" to "historicalYields",
+        "plot link" to "plotLink", "add plot" to "plotLink", "प्लॉट जोड़ें" to "plotLink",
+        "village block number" to "village", "गाँव ब्लॉक नंबर" to "village",
+        "signer farmer" to "signerFarmer", "किसान हस्ताक्षरकर्ता" to "signerFarmer",
+        "signed date" to "signedDate", "हस्ताक्षर की तारीख" to "signedDate",
+        "witness" to "witness", "गवाह" to "witness",
+        "aadhaar front" to "aadhaarFront", "aadhaar back" to "aadhaarBack",
+        "farmer signature" to "farmerSignature", "agreement front" to "agreementFront",
+        "agreement back" to "agreementBack", "land deed page 1" to "landDeedPage1",
+        "land deed page 2" to "landDeedPage2", "linked farmers" to "linkedFarmers",
+        "field photos" to "fieldPhotos", "sensor iot reference" to "sensorIotReference",
+        "visit date" to "visitDate", "visitor" to "visitorName",
+        "other fertilizer name" to "otherFertilizerName",
+        "fertilizer quantity" to "otherFertilizerQuantity",
+        "fertilizer applications" to "otherFertilizerApplications",
+        "fertilizer application dates" to "fertilizerApplicationDates",
+        "drying event dates" to "dryingEventDates", "re flooding dates" to "refloodingDates",
+        "re-flooding dates" to "refloodingDates",
+        "year" to "year", "season" to "season", "yield" to "yield"
     )
 
     fun normalizeLabel(raw: String): String =
