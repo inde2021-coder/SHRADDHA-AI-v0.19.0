@@ -271,6 +271,11 @@ class CurriculumProgressStore(context: Context) {
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        // Never create a replacement key over existing ciphertext: that would permanently
+        // make previously encrypted progress undecryptable and disguise a key-loss event.
+        check(!prefs.contains(ENCRYPTED_STATE)) {
+            "Learning progress encryption key is missing; refusing to replace it."
+        }
         val generator = javax.crypto.KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
             KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
