@@ -114,9 +114,14 @@ class AkkpsBrowserWindow:
             return
         try:
             result = self.operator.submit_after_confirmation("SUBMIT AKKPS RECORD")
-            self.status.set("Submit clicked. Server-side record save is NOT yet verified.")
-            self._show(result)
-            messagebox.showwarning("Verify saved record", "The submit click is not proof of saving. Re-open the relevant AKKPS list and verify the record. Do not submit again until checked.", parent=self.window)
+            if result.get("server_record_verified"):
+                self.status.set("AKKPS server response verified • Record ID: " + str(result.get("record_id")))
+                self._show(result)
+                messagebox.showinfo("AKKPS record response verified", "A successful same-origin write response included a record ID. Please still confirm the record appears in the AKKPS list.", parent=self.window)
+            else:
+                self.status.set("Submit outcome UNCERTAIN. Do not submit again until checked.")
+                self._show(result)
+                messagebox.showwarning("Verify saved record", "The result is uncertain. The submit may have reached the server. Re-open the relevant AKKPS list and check before any retry.", parent=self.window)
         except Exception as exc:
             messagebox.showerror("Submission blocked", str(exc), parent=self.window)
 
