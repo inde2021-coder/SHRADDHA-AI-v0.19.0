@@ -222,7 +222,6 @@ object VoiceGatewaySettings {
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
         val normalized = provider.uppercase()
         if (normalized !in configuredProviders(context).orEmpty()) return null
-        `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, normalized)
         val providerId = if (normalized == "CLAUDE") "anthropic" else normalized.lowercase()
         val combinedPrompt = "You are the " + role.take(40) + " agent in Shraddha AI.\n" +
             systemInstruction.take(1800) + "\n\n" + prompt.take(10_000)
@@ -257,9 +256,7 @@ object VoiceGatewaySettings {
                 runCatching { com.Lia.assistant.voice.ProviderTokenUsage(normalized, model, inputTokens, outputTokens) }.getOrNull()
             } else null
             if (usage == null) {
-                `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, normalized, model)
             } else {
-                `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, usage)
             }
             return reply
         }
