@@ -1026,10 +1026,10 @@ class AkkpsBrowserOperator:
           const controls = [...document.querySelectorAll('button,[role=button],a')].filter(visible)
             .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
             .slice(0, 60);
-          const uploads = [...document.querySelectorAll('input[type=file]')].filter(visible).slice(0, 20).map(e => ({
+          const uploads = [...document.querySelectorAll('input[type=file]')].slice(0, 20).map(e => ({
             label: [...(e.labels || [])].map(x => clean(x)).filter(Boolean).join(' / ') ||
               e.getAttribute('aria-label') || e.name || e.id || 'unlabelled file input',
-            accept: e.accept || ''
+            accept: e.accept || '', visible: visible(e)
           }));
           const engine = window.L ? 'leaflet' :
             (window.mapboxgl ? 'mapbox-gl' : (window.google && window.google.maps ? 'google-maps' :
