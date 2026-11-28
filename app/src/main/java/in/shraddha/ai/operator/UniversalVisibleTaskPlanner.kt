@@ -119,6 +119,10 @@ object UniversalVisibleTaskPlanner {
                     if (target.isNotBlank() || value.isNotBlank()) {
                         return Result(error = "Navigation step में target/value नहीं होना चाहिए।")
                     }
+                    if (action in setOf(OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD) &&
+                        snapshot.elements.none { it.scrollable }) {
+                        return Result(error = "स्क्रीन पर कोई observed scrollable area नहीं है; scroll अनुमान से नहीं किया जाएगा।")
+                    }
                 }
             }
             steps += UniversalVisibleStep(
