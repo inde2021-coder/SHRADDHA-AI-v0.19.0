@@ -289,7 +289,8 @@ class AkkpsBrowserOperator:
             safe_fields.append(FieldInfo(
                 label=label, name=item.get("name", ""), input_type=kind,
                 required=bool(item.get("required")), disabled=bool(item.get("disabled")),
-                read_only=bool(item.get("readOnly")), multiple=bool(item.get("multiple")),\n                options=tuple(" ".join(str(option).split())[:120] for option in item.get("options", ())[:80]),
+                read_only=bool(item.get("readOnly")), multiple=bool(item.get("multiple")),
+                options=tuple(" ".join(str(option).split())[:120] for option in item.get("options", ())[:80]),
             ))
         safe_url, safe_title = _safe_runner_location(data["url"])
         safe_links = []
@@ -388,7 +389,10 @@ class AkkpsBrowserOperator:
                 raise RuntimeError(f"Field {label!r} is disabled or read-only.")
             if field.multiple or field.input_type in SENSITIVE_TYPES or field.input_type in UNFILLABLE_TYPES or field.input_type in {"checkbox", "radio"}:
                 raise RuntimeError(f"Field {label!r} is not an auto-fillable text/select field.")
-            preview.append({"field": field.label, "value": str(value), "required": field.required,\n                            "available_options": list(field.options) if field.input_type == "select" else []})
+            if field.input_type == "select" and str(value) not in field.options:
+                raise RuntimeError(f"Value {value!r} is not an exact visible option for {label!r}.")
+            preview.append({"field": field.label, "value": str(value), "required": field.required,
+                            "available_options": list(field.options) if field.input_type == "select" else []})
         return {"page": inventory.title, "url": inventory.url, "changes": preview,
                 "requires_user_confirmation": True, "submitted": False}
 
