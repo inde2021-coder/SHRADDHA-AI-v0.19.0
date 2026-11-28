@@ -162,6 +162,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Offline Language Lab", command=lambda: LanguageLabDialog(self.root)).pack(side="left", padx=6)
+        ttk.Button(buttons, text="AKKPS Website Operator", command=self._open_akkps_browser).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
@@ -185,6 +186,16 @@ class PcCompanionApp:
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _open_akkps_browser(self):
+        try:
+            try:
+                from .akkps_browser_ui import AkkpsBrowserWindow
+            except ImportError:
+                from akkps_browser_ui import AkkpsBrowserWindow
+            AkkpsBrowserWindow(self.root)
+        except Exception as exc:
+            messagebox.showerror("AKKPS Website Operator", str(exc), parent=self.root)
 
     def _set_local_hardware(self, kind):
         from tkinter import simpledialog
