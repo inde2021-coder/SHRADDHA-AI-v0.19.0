@@ -128,8 +128,6 @@ object GeminiTextClient {
         if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
             return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
         }
-        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, "GEMINI") }
-            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         if (apiKey.isBlank()) {
             return ChatReplyResult.Error("Gemini API key is missing. Please add it in Settings.")
         }
