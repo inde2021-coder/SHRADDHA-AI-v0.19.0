@@ -64,4 +64,29 @@ class PersonalityPromptBuilderTest {
         assertTrue("Recent turns must be present", recap.contains("Message 20"))
         ConversationMemory.clear()
     }
+    @Test
+    fun pawariPromptDoesNotPretendTheDialectModelExists() {
+        val prompt = PersonalityPromptBuilder.build(
+            personality = Personality.NORMAL,
+            language = LanguagePreference.PAWARI,
+            detectedLanguage = null,
+            recap = null,
+            assistantName = "Shraddha AI"
+        )
+        assertTrue(prompt.contains("Pawari/Powari model support is not verified"))
+        assertTrue(prompt.contains("Do not pretend to speak Pawari"))
+    }
+
+    @Test
+    fun marathiAndSanskritHaveExplicitLanguagePolicies() {
+        val marathi = PersonalityPromptBuilder.build(
+            Personality.NORMAL, LanguagePreference.MARATHI, null, null, "Shraddha AI"
+        )
+        val sanskrit = PersonalityPromptBuilder.build(
+            Personality.NORMAL, LanguagePreference.SANSKRIT, null, null, "Shraddha AI"
+        )
+        assertTrue(marathi.contains("Respond in Marathi"))
+        assertTrue(sanskrit.contains("Respond in Sanskrit"))
+    }
+
 }

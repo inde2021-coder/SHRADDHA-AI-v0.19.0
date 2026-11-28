@@ -1,0 +1,44 @@
+# Pawari / Powari community data plan for Shraddha AI
+
+**Status: candidate resources identified; no Pawari speech dataset has yet been verified as redistributable or sufficient for ASR/TTS training.**
+
+## Important language-identity gate
+
+**Product scope confirmed by the user:** Shraddha should plan for these regional Pawari/Powari profiles: (1) Balaghat and Seoni districts, Madhya Pradesh; and (2) Gondia and Bhandara districts, Maharashtra. Keep district-level subprofiles inside the two state-level tracks. Treat each district variety as unverified until local fluent speakers confirm it; do not assume all four districts share identical vocabulary or pronunciation. Do not merge transcripts or model labels across districts without community review.
+
+The label Pawari/Powari is not a sufficient training label by itself. Historical linguistic references use Pawari/Pawri in connection with Bareli-Rathwi (Glottolog code shown as `bgd`), while community usage and the Seoni Pawari Dictionary describe a Pawari colloquial dialect used by the Pawar community in Seoni, Madhya Pradesh. The Maharashtra profile must be validated with speakers from the exact locality; do not assume every Maharashtra Pawar/Powari-speaking community uses the same variety. For each speaker, record the self-identified variety, district/tehsil (village only if needed and consented), and preferred writing system. Keep separate profiles until fluent speakers from both regions approve any mapping.
+
+## Publicly discoverable candidate resources
+
+1. **Pawari Dictionary** — a community-created dictionary project whose author identifies Seoni, Madhya Pradesh, and describes Pawari word entries with Hindi/English meanings, usage examples and audio. This is a useful lead for community contact and vocabulary review, not a dataset licence. Do not scrape, redistribute, or train on its audio/text until the creator grants explicit written permission and confirms the licence.
+2. **Linguistic Data Consortium for Indian Languages (LDC-IL)** — its catalogue lists a Pawari Parallel Text Corpus. The public catalogue listing does not, by itself, establish the exact variety, downloadable files, licence, or permission for commercial model training. Contact LDC-IL and record the actual terms before use.
+3. **VAANI / IISc** — a large district-diverse speech resource with district/language filters. It is a discovery lead only. Check whether any records are explicitly labelled Pawari/Powari, inspect the annotation and contributor consent terms, and verify redistribution/training rights. Do not infer Pawari from a district or from generic Bhili/Hindi labels.
+4. **People's Linguistic Survey of India, Madhya Pradesh volume** — lists Pawari among documented state language varieties. It can guide orthography and fieldwork, but a book or survey is not automatically an audio corpus or a model-training licence.
+5. **Glottolog references** — useful for resolving naming and classification differences; they are metadata/references, not a speech dataset.
+
+## Data collection protocol
+
+- Obtain approval from the community and each speaker before recording. Consent must separately cover: transcription, public release, research, commercial use, model training, voice synthesis, and attribution. Default each optional permission to OFF.
+- Recruit fluent adult speakers from Balaghat, Seoni, Gondia and Bhandara, recording each speaker's self-identified variety and district; record age band and broad locality only when consented. Do not collect Aadhaar, phone numbers, precise home coordinates, or unrelated personal details.
+- Collect read speech, prompted conversational speech, spontaneous speech and code-switching. Include women and men, different age bands, quiet/noisy environments, and natural speaking pace.
+- Each clip must have a unique random ID, WAV PCM metadata, transcript in the speaker-approved script, Hindi/English gloss where approved, speaker-variety tag, recording conditions, consent scope, and reviewer status.
+- Two independent fluent speakers review every transcript; disagreements remain as documented variants until resolved. Do not normalize distinctive Pawari words into Hindi.
+- Keep speaker-disjoint train/dev/test splits. No speaker may occur across splits. Deduplicate repeated prompts and near-duplicate recordings.
+- Publish a dataset card, consent form version, licence, takedown contact, data retention policy, and SHA-256 manifest before any training run.
+- Build four district-tagged collection/evaluation profiles: `pawari-balaghat-mp`, `pawari-seoni-mp`, `powari-gondia-mh`, and `powari-bhandara-mh`. Keep them grouped under Madhya Pradesh and Maharashtra in the UI, but preserve district tags in every dataset record. These are provisional product profile IDs, not claims of formally established linguistic classification.
+- Until each regional dataset is approved, that profile must remain **community-data required / not supported by a verified ASR, TTS or translation model**. Shraddha may search an approved local dictionary or show a human-reviewed phrasebook, but must not invent Pawari translations or speak Hindi as if it were Pawari.
+
+## Minimum evaluation gate
+
+- ASR: at least 100 consented utterances per variety for a first smoke test; expand before release. Report WER and CER, named-entity accuracy, code-switch behaviour and results by speaker group.
+- TTS: native-speaker listening review for intelligibility, tone, phonology and speaker-consent compliance. Do not clone a community member's voice without explicit voice-synthesis permission.
+- Translation: independently authored held-out sentence pairs, reviewed by two fluent speakers. Report meaning preservation and variant disagreements.
+- Release requires community reviewer sign-off for the exact dataset/model version and proof that every recording's consent scope permits the intended use.
+
+## Source links
+
+- Pawari Dictionary (creator/about): https://pawaridictionary.rfhindi.com/public/page/about-us
+- LDC-IL Pawari Parallel Text Corpus catalogue: https://www.ldcil.org/resourcesparallel
+- VAANI dataset portal: https://vaani.iisc.ac.in/dataset
+- PLSI Madhya Pradesh language survey reference: https://dev.orientblackswan.com/pdfs/downloads/ELT_2015.pdf
+- Glottolog reference for Pawari/Pawri/Bareli-Rathwi naming: https://glottolog.org/resource/reference/id/318353

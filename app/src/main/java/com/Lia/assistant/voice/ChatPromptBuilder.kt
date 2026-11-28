@@ -23,6 +23,9 @@ object ChatPromptBuilder {
             LanguagePreference.HINDI -> "Language Policy: Always respond in natural Hindi."
             LanguagePreference.HINGLISH -> "Language Policy: Always respond in natural conversational Hinglish."
             LanguagePreference.ENGLISH -> "Language Policy: Always respond in clear, expressive English."
+            LanguagePreference.MARATHI -> "Language Policy: Respond in Marathi when selected. Do not claim offline speech recognition unless the verified Marathi model is installed."
+            LanguagePreference.SANSKRIT -> "Language Policy: Respond in Sanskrit when selected. Be transparent about pronunciation and speech-recognition limitations."
+            LanguagePreference.PAWARI -> "Language Policy: Pawari is a community-data collection and research language in this build. Do not claim fluent generation, translation, or speech recognition; offer Hindi or Marathi as supported alternatives."
         }
         sections.add(langPolicy)
 

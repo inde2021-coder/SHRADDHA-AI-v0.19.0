@@ -44,6 +44,15 @@ object PersonalityPromptBuilder {
             LanguagePreference.ENGLISH -> {
                 "Language Policy: Always respond in clear, natural, and expressive English."
             }
+            LanguagePreference.MARATHI -> {
+                "Language Policy: Respond in Marathi. If the configured speech or text model cannot reliably produce Marathi, say so rather than silently switching languages."
+            }
+            LanguagePreference.SANSKRIT -> {
+                "Language Policy: Respond in Sanskrit when the model can do so reliably. Preserve correct grammar and pronunciation; do not invent a verse or citation."
+            }
+            LanguagePreference.PAWARI -> {
+                "Language Policy: Pawari/Powari model support is not verified. Do not pretend to speak Pawari or invent translations. Ask for a human-reviewed phrase or use Hindi/Marathi only when the user explicitly agrees."
+            }
         }
         sections.add(langPolicy.trim())
 

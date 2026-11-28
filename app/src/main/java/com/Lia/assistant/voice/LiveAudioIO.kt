@@ -64,6 +64,7 @@ class LiveAudioIO(
     fun startRecording() {
         synchronized(recordingLock) {
             if (!isRecording.compareAndSet(false, true)) return
+            recordingErrorReported.set(false)
             var createdRecord: AudioRecord? = null
             try {
                 val minBuf = AudioRecord.getMinBufferSize(
@@ -127,7 +128,7 @@ class LiveAudioIO(
                         }
                     } catch (error: Exception) {
                         if (isRecording.compareAndSet(true, false)) {
-                            onRecordingError(error.localizedMessage ?: "Microphone recording stopped unexpectedly.")
+                            reportRecordingError(error.localizedMessage ?: "Microphone recording stopped unexpectedly.")
                         }
                     } finally {
                         buffer.fill(0)
@@ -140,7 +141,7 @@ class LiveAudioIO(
                 releaseEffects()
                 runCatching { createdRecord?.stop() }
                 runCatching { createdRecord?.release() }
-                onRecordingError(error.localizedMessage ?: "Unable to start microphone recording.")
+                reportRecordingError(error.localizedMessage ?: "Unable to start microphone recording.")
             }
         }
     }
@@ -163,6 +164,13 @@ class LiveAudioIO(
             }
             runCatching { recordToStop?.release() }
             releaseEffects()
+        }
+    }
+
+    /** Report only the first failure for one recording generation. */
+    private fun reportRecordingError(message: String) {
+        if (recordingErrorReported.compareAndSet(false, true)) {
+            runCatching { onRecordingError(message) }
         }
     }
 
