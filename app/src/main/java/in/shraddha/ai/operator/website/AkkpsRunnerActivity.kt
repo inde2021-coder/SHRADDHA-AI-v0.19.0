@@ -41,6 +41,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var pendingDocumentFieldLabel: String? = null
     private var pendingBoundaryUploadUri: Uri? = null
     private var pendingBoundaryUploadPlotId: String? = null
     private var pendingBoundaryUploadPreparedAt = 0L
@@ -789,8 +790,10 @@ class AkkpsRunnerActivity : Activity() {
         """.trimIndent().replace("__LABEL__", JSONObject.quote(fieldLabel))
         web.evaluateJavascript(script) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result?.optString("status") == "picker_requested") pendingDocumentFieldLabel = fieldLabel
+            else pendingDocumentFieldLabel = null
             status.text = when (result?.optString("status")) {
-                "picker_requested" -> "AKKPS के $fieldLabel file picker को request भेजी गई। यदि picker न खुले तो वेबसाइट के उसी Upload field पर tap करें; upload अलग action है।"
+                "picker_requested" -> "AKKPS के $fieldLabel file picker को request भेजी गई। चुनी हुई file केवल attach होगी; portal upload अलग action है।"
                 "form_ambiguous" -> "एक स्पष्ट AKKPS form नहीं मिला; document picker नहीं खोला।"
                 else -> "Exact $fieldLabel file field नहीं मिला या ambiguous है; कोई file attach नहीं हुई।"
             }
@@ -2581,6 +2584,40 @@ Return exact JSON only. Do not include prose or markdown."""
             }.getOrNull()
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
+            val fieldLabel = pendingDocumentFieldLabel
+            pendingDocumentFieldLabel = null
+            if (selected.isNullOrEmpty()) {
+                status.text = "Document picker रद्द हुआ; कोई file attach नहीं हुई।"
+            } else if (!fieldLabel.isNullOrBlank()) {
+                val verify = """
+                    (() => {
+                      const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\\s+/g," ").trim();
+                      const key=norm(__LABEL__);
+                      const forms=[...document.querySelectorAll("form")].filter(f=>f.getClientRects().length);
+                      if(forms.length!==1) return JSON.stringify({attached:false});
+                      const matches=[...forms[0].querySelectorAll('input[type="file"]')].filter(e=>{
+                        const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                        const ids=(e.getAttribute("aria-labelledby")||"").split(/\\s+/).filter(Boolean);
+                        labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
+                        labels.push(e.getAttribute("aria-label")||"",e.name||"",e.id||"");
+                        return labels.map(norm).some(x=>x===key || x.includes(key));
+                      });
+                      if(matches.length!==1) return JSON.stringify({attached:false});
+                      const names=[...(matches[0].files||[])].map(f=>f.name).filter(Boolean);
+                      return JSON.stringify({attached:names.length===1,name:names[0]||""});
+                    })()
+                """.trimIndent().replace("__LABEL__", JSONObject.quote(fieldLabel))
+                web.evaluateJavascript(verify) { raw ->
+                    val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+                    if (result?.optBoolean("attached") == true) {
+                        status.text = "$fieldLabel में ${result.optString("name")} file attach हुई। अभी AKKPS पर upload नहीं हुई; Upload अलग से करें।"
+                    } else {
+                        status.text = "File picker से selection लौटी, लेकिन $fieldLabel field में attachment verify नहीं हुई। Upload न करें; manually जाँचें।"
+                    }
+                }
+            } else {
+                status.text = "File picker से file चुनी गई। Portal upload अभी नहीं हुआ।"
+            }
         }
         if (requestCode == REQUEST_FARMER_CARD_OCR && resultCode == RESULT_OK) {
             data?.data?.let(::processFarmerCardImage)
@@ -2700,6 +2737,7 @@ Return exact JSON only. Do not include prose or markdown."""
     override fun onDestroy() {
         stopGpsWalk()
         uploadCallback?.onReceiveValue(null); uploadCallback=null
+        pendingDocumentFieldLabel = null
         pendingBoundaryUploadUri?.let { runCatching { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         pendingBoundaryUploadUri = null
         pendingBoundaryUploadPlotId = null
