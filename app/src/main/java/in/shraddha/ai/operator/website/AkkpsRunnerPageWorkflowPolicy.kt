@@ -7,6 +7,12 @@ data class AkkpsAutocompleteRequest(
     val query: String
 )
 
+enum class AkkpsBoundaryVoiceAction {
+    INSPECT_MAP, VERIFY_UPLOAD, PREPARE_UPLOAD, IMPORT_SATELLITE,
+    START_GPS_WALK, STOP_GPS_WALK, SAVE_LOCAL, REOPEN_LOCAL,
+    IMPORT_KML, EXPORT_KML
+}
+
 /**
  * Parses only bounded, user-spoken page actions for the AKKPS Runner.
  * It never creates farmer/report values or chooses a suggestion not named by the user.
@@ -24,6 +30,32 @@ object AkkpsRunnerPageWorkflowPolicy {
         Triple("historical yield rows", Regex("(historical yield|past yield|पुरानी उपज|ऐतिहासिक उपज)"), "historical yield"),
         Triple("water level at each visit", Regex("(water level|water reading|जल स्तर|पानी की रीडिंग)"), "water level")
     )
+
+    fun plotId(command: String): String? {
+        val match = Regex("(?i)^(?:set\\s+)?(?:plot\\s+id|प्लॉट\\s+आईडी)\\s*(?:is|to|=|:)?\\s*([A-Za-z0-9_-]{1,80})$").matchEntire(command.trim())
+        return match?.groupValues?.getOrNull(1)
+    }
+
+    fun boundaryAction(command: String): AkkpsBoundaryVoiceAction? {
+        val value = normalize(command)
+        return when (value) {
+            "inspect map", "inspect live map", "check map", "नक्शा जांचो", "नक्शा जाँचो",
+            "मानचित्र जांचो", "सीमा जांचो" -> AkkpsBoundaryVoiceAction.INSPECT_MAP
+            "verify boundary upload", "check boundary upload", "confirm boundary upload",
+            "boundary upload verify", "सीमा अपलोड जांचो", "सीमा अपलोड की पुष्टि करो" -> AkkpsBoundaryVoiceAction.VERIFY_UPLOAD
+            "prepare boundary for upload", "prepare kml for upload", "prepare boundary kml",
+            "सीमा अपलोड के लिए तैयार करो", "kml अपलोड के लिए तैयार करो" -> AkkpsBoundaryVoiceAction.PREPARE_UPLOAD
+            "import satellite candidate", "import satellite boundary", "satellite candidate चुनें",
+            "सैटेलाइट सीमा चुनें" -> AkkpsBoundaryVoiceAction.IMPORT_SATELLITE
+            "start gps walk", "start boundary walk", "gps walk शुरू करो", "सीमा की gps walk शुरू करो" -> AkkpsBoundaryVoiceAction.START_GPS_WALK
+            "stop gps walk", "stop boundary walk", "gps walk रोकें", "सीमा की gps walk रोकें" -> AkkpsBoundaryVoiceAction.STOP_GPS_WALK
+            "save local boundary", "save boundary locally", "स्थानीय सीमा save करो", "सीमा locally save करो" -> AkkpsBoundaryVoiceAction.SAVE_LOCAL
+            "reopen saved boundary", "open saved boundary", "saved boundary खोलो", "पुरानी सीमा खोलो" -> AkkpsBoundaryVoiceAction.REOPEN_LOCAL
+            "import boundary kml", "import kml boundary", "kml सीमा import करो" -> AkkpsBoundaryVoiceAction.IMPORT_KML
+            "export boundary kml", "export kml boundary", "kml सीमा export करो" -> AkkpsBoundaryVoiceAction.EXPORT_KML
+            else -> null
+        }
+    }
 
     fun repeatedEntrySection(command: String): String? {
         val value = normalize(command)
