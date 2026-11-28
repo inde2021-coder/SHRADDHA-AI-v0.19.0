@@ -34,6 +34,10 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_rejects_unverified_lookalike_host(self):
         with self.assertRaises(ValueError):
             validate_akkps_url("https://www.akps.ngo/runner")
+        with self.assertRaises(ValueError):
+            validate_akkps_url("https://www.akkps.ngo:8443/runner")
+        with self.assertRaises(ValueError):
+            validate_akkps_url("https://www.akkps.ngo:invalid/runner")
 
     def test_sensitive_labels_are_detected(self):
         for label in ("Password", "OTP", "PIN", "CAPTCHA", "पासवर्ड", "ओटीपी"):
