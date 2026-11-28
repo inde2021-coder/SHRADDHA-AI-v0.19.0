@@ -100,8 +100,6 @@ object ShraddhaSpeechClient {
             done(Result.failure(IllegalStateException("Online AI is disabled. Speech text was not sent to the voice gateway.")))
             return
         }
-        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.requireUsageCountersAvailable(context, "Custom Shraddha voice synthesis") }
-            .onFailure { done(Result.failure(it)); return }
         val clean = text.trim().take(6000)
         if (clean.isBlank()) {
             done(Result.failure(IllegalArgumentException("Speech text is empty")))
