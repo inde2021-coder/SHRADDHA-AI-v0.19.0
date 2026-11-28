@@ -43,6 +43,7 @@ class AkkpsRunnerActivity : Activity() {
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingBoundaryUploadUri: Uri? = null
     private var pendingBoundaryUploadPlotId: String? = null
+    private var pendingBoundaryUploadPreparedAt = 0L
     private var pendingAwdRepeaterSection: String? = null
     private var pendingAwdRepeaterUrl: String? = null
     private var pendingAwdRepeaterBaseline = -1
@@ -317,11 +318,13 @@ class AkkpsRunnerActivity : Activity() {
                             .setNegativeButton("दूसरी File चुनें") { _, _ ->
                                 pendingBoundaryUploadUri = null
                                 pendingBoundaryUploadPlotId = null
+                                pendingBoundaryUploadPreparedAt = 0L
                                 chooseWebsiteFile(params, callback)
                             }
                             .setPositiveButton("यही KML attach करें") { _, _ ->
                                 pendingBoundaryUploadUri = null
                                 pendingBoundaryUploadPlotId = null
+                                pendingBoundaryUploadPreparedAt = 0L
                                 uploadCallback = null
                                 grantUriPermission(packageName, preparedBoundary, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 callback.onReceiveValue(arrayOf(preparedBoundary))
@@ -899,6 +902,7 @@ class AkkpsRunnerActivity : Activity() {
         }.onSuccess { uri ->
             pendingBoundaryUploadUri = uri
             pendingBoundaryUploadPlotId = plotId
+            pendingBoundaryUploadPreparedAt = System.currentTimeMillis()
             status.text = "KML तैयार है। अब AKKPS Plots में Create Boundary/Boundary Upload खोलें; website file picker में यह KML attach करने की पुष्टि करें। Server upload अभी नहीं हुआ।"
         }.onFailure {
             status.text = "KML तैयार नहीं हुई: ${it.localizedMessage}"
@@ -1003,14 +1007,23 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "पहले AKKPS Runner का Plots module खोलें।"
             return
         }
+        val currentPlotId = plotIdInput.text.toString().trim()
+        val preparedAt = pendingBoundaryUploadPreparedAt
+        if (currentPlotId.isBlank() || preparedAt <= 0L || pendingBoundaryUploadPlotId != currentPlotId) {
+            status.text = "पहले इसी Plot ID की reviewed KML तैयार करें और AKKPS form में attach करें; उसके बाद upload verify करें।"
+            return
+        }
         val script = """
             (() => {
+              const plotId=__PLOT_ID__, preparedAt=__PREPARED_AT__;
               const events=Array.isArray(window.__akkpsSubmitEvents)?window.__akkpsSubmitEvents:[];
               const recent=events.filter(e=>e && e.recordWrite &&
                 ['POST','PUT','PATCH'].includes(String(e.method||'').toUpperCase()) &&
                 Number(e.httpStatus)>=200 && Number(e.httpStatus)<300 &&
                 e.success===true && !!String(e.recordId||'').trim() &&
                 /(boundary|plot|map|kml)/i.test(String(e.path||'')) &&
+                Number(e.at||0)>=preparedAt &&
+                (String(e.recordId||'')===plotId || String(e.path||'').includes(plotId)) &&
                 Date.now()-Number(e.at||0)<=15*60*1000);
               const last=recent.sort((a,b)=>Number(b.at)-Number(a.at))[0]||null;
               return JSON.stringify(last?{
@@ -1019,9 +1032,12 @@ class AkkpsRunnerActivity : Activity() {
               }:{verified:false});
             })()
         """.trimIndent()
+            .replace("__PLOT_ID__", JSONObject.quote(currentPlotId))
+            .replace("__PREPARED_AT__", preparedAt.toString())
         web.evaluateJavascript(script) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (result?.optBoolean("verified") == true) {
+                pendingBoundaryUploadPreparedAt = 0L
                 val recordId = result.optString("recordId")
                 status.text = "AKKPS boundary write response verified • Record ID: $recordId • अब Plot map Reopen करके polygon दिखना जाँचें।"
                 AlertDialog.Builder(this)
@@ -2359,6 +2375,7 @@ Return exact JSON only. Do not include prose or markdown."""
         pendingBoundaryUploadUri?.let { runCatching { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         pendingBoundaryUploadUri = null
         pendingBoundaryUploadPlotId = null
+        pendingBoundaryUploadPreparedAt = 0L
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
