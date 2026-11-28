@@ -51,10 +51,15 @@ class AkkpsWebsiteProfileTest {
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner\\\\..\\\\admin"))
     }
 
-    @Test fun runnerNavigationAllowsCanonicalSiteAndNonRestrictedModules() {
+    @Test fun runnerNavigationAllowsLoginAndOnlyApprovedRunnerModules() {
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/login"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://akkps.ngo/runner/plots?page=2"))
-        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/administrator-help"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/awd-reports"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/plots/new"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/awd-reports/new"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/administrator-help"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/dashboard"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("http://www.akkps.ngo/runner"))
     }
 
