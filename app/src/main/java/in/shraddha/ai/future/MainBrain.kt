@@ -4,6 +4,8 @@ import `in`.shraddha.ai.operator.PlannedOperatorAction
 import `in`.shraddha.ai.operator.TaskPlannerOperatorBridge
 import `in`.shraddha.ai.operator.OperatorStep
 import `in`.shraddha.ai.operator.OperatorActionJournal
+import `in`.shraddha.ai.operator.UniversalCommandAdapterRegistry
+import `in`.shraddha.ai.operator.AndroidAccessibilityCommandAdapter
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import android.content.Context
 import org.json.JSONObject
@@ -28,6 +30,9 @@ class MainBrain(
 ) {
     private val appContext = context?.applicationContext
     private val actionJournal = appContext?.let(::OperatorActionJournal)
+    private val commandAdapters = UniversalCommandAdapterRegistry().apply {
+        register(AndroidAccessibilityCommandAdapter(executeVerified))
+    }
     data class WorkflowRequest(
         val id: String,
         val title: String,
@@ -463,7 +468,7 @@ class MainBrain(
             return MainBrainExecutionResult.Failed(claimed.task.id, "Queued workflow request is missing", scheduler.snapshot())
         }
         val bridge = TaskPlannerOperatorBridge(
-            executeVerified = executeVerified,
+            executeVerified = { step, confirmed -> commandAdapters.execute(step, confirmed) },
             audit = audit,
             beforeExecute = { workflowId, action ->
                 // Durable write-ahead journal is mandatory for app-backed Operator execution.
