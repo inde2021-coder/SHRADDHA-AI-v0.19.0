@@ -35,6 +35,7 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
                     "https://www.akkps.ngo/runner/admin", "https://www.akkps.ngo/runner/coordinator/plots",
                     "https://www.akkps.ngo/runner/../admin",
                     "https://www.akkps.ngo/runner/%2e%2e/admin",
+                    "https://www.akkps.ngo/runner/%252e%252e/admin",
                     "https://www.akkps.ngo/runner%2f..%2fadmin"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 validate_runner_url(url)
