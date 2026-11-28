@@ -64,6 +64,12 @@ object PersistentChatMemory {
             .getOrThrow().takeIf { it.isNotBlank() }
     }
 
+    /** Prefer the consented encrypted recap for a new voice prompt; otherwise keep session context. */
+    fun promptRecap(context: Context, sessionRecap: String?): String? {
+        if (!isEnabled(context)) return sessionRecap
+        return recap(context) ?: sessionRecap
+    }
+
     fun record(context: Context, role: String, text: String): Result<Unit> = runCatching {
         require(role == "User" || role == "Assistant") { "Unsupported memory role" }
         val safeText = text.trim().take(MAX_TURN_CHARS)
