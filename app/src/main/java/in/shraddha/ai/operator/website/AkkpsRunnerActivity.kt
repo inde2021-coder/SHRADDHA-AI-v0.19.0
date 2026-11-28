@@ -1471,19 +1471,6 @@ class AkkpsRunnerActivity : Activity() {
         if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
             status.text = "Password, OTP, PIN या CAPTCHA को command में न लिखें। वेबसाइट के login/form में स्वयं दर्ज करें।"; return
         }
-        if (Regex("(?i)\\b(verify|confirm|check)\\b.*\\b(boundary|kml)\\b|(?:boundary|kml).*(?:verify|confirm|check|जाँचो|जांचो|पुष्टि)").containsMatchIn(raw)) {
-            verifyLiveBoundaryUpload()
-            return
-        }
-        if (Regex("(?i)\\b(inspect|check|देखो|जाँचो|जांचो)\\b.*\\b(map|boundary|नक्शा|मानचित्र|सीमा)\\b|(?:नक्शा|मानचित्र|सीमा).*(?:जाँचो|जांचो|देखो)").containsMatchIn(raw)) {
-            inspectLiveMap()
-            return
-        }
-        if (Regex("(?i)\\b(prepare|attach|export)\\b.*\\b(boundary|kml|map)\\b|(?:boundary|kml).*(?:तैयार|अपलोड के लिए)").containsMatchIn(raw) ||
-            raw.contains("सीमा अपलोड के लिए तैयार")) {
-            prepareBoundaryForAkkpsUpload()
-            return
-        }
         AkkpsRunnerPageWorkflowPolicy.plotId(raw)?.let { plotId ->
             plotIdInput.setText(plotId)
             status.text = "AKKPS Plot ID voice command से set हुई: $plotId"
