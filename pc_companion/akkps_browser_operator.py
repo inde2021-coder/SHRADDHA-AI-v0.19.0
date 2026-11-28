@@ -1081,18 +1081,31 @@ class AkkpsBrowserOperator:
         route = urlparse(self.page.url).path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
             raise RuntimeError("Live map editing is available only in the AKKPS Runner Plots workflow.")
-        map_locator = self.page.locator(
-            ".leaflet-container:visible, .mapboxgl-map:visible, .ol-viewport:visible, .gm-style:visible, "
-            "[data-testid*='map' i]:visible, [role=application][aria-label*='map' i]:visible"
+        map_candidates = self.page.locator(
+            ".leaflet-container, .mapboxgl-map, .ol-viewport, .gm-style, "
+            "[data-testid*='map' i], [role=application][aria-label*='map' i], [aria-label*='map' i]"
         )
-        if map_locator.count() != 1:
+        root_indices = map_candidates.evaluate_all("""items => {
+          const visible = e => !!(e && e.getClientRects().length &&
+            getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden');
+          const entries = items.map((e, i) => ({e, i})).filter(x => visible(x.e));
+          const engine = entries.filter(({e}) =>
+            e.classList.contains('leaflet-container') || e.classList.contains('mapboxgl-map') ||
+            e.classList.contains('ol-viewport') || e.classList.contains('gm-style'));
+          const preferred = engine.length ? engine : entries;
+          return preferred.filter(({e}) =>
+            !preferred.some(({e: other}) => other !== e && other.contains(e))
+          ).map(x => x.i);
+        }""")
+        if len(root_indices) != 1:
             raise RuntimeError(
-                f"Expected one visible AKKPS Plot map container; found {map_locator.count()}. "
+                f"Expected one visible AKKPS Plot map container; found {len(root_indices)}. "
                 "Inspect the authenticated page before choosing a map target."
             )
-        # Only controls inside the uniquely identified map container are eligible.
-        # Page-level Edit/Save buttons must never be mistaken for map tools.
-        controls = map_locator.first.locator("button,[role=button],a[title],a[aria-label]")
+        # Only controls inside the unique map root are eligible. Page-level Edit/Save
+        # controls are never mistaken for map tools.
+        map_locator = map_candidates.nth(root_indices[0])
+        controls = map_locator.locator("button,[role=button],a[title],a[aria-label]")
         matches = controls.evaluate_all("""(items, wanted) => items.map((e, i) => ({
           i, label: String(e.innerText || e.getAttribute('aria-label') ||
             e.getAttribute('title') || '').replace(/\\s+/g, ' ').trim(),
