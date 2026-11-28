@@ -22,7 +22,7 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
         self.assertEqual(safe_url, "https://www.akkps.ngo/runner/farmers")
         self.assertEqual(title, "FARMERS")
         self.assertEqual(_safe_action_label("Create New Farmer"), "Create")
-        self.assertIsNone(_safe_action_label("View Ram Kumar"))
+        self.assertEqual(_safe_action_label("View Ram Kumar"), "View")
 
     def test_runner_module_catalog_is_exact_and_bounded(self):
         self.assertEqual(RUNNER_MODULES["farmers"], "/runner/farmers")
