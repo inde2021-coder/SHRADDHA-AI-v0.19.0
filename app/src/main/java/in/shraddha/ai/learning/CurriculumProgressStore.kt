@@ -171,7 +171,11 @@ class CurriculumProgressStore(context: Context) {
     @Synchronized fun startSession() {
         // Recover a session left open by process death before starting a new one.
         if (prefs.getLong(SESSION_STARTED_AT, 0L) > 0L) endSession()
-        prefs.edit().putLong(SESSION_STARTED_AT, System.currentTimeMillis()).commit()
+        val lastClosed = readState().optLong(LAST_CLOSED_SESSION_STARTED_AT, 0L)
+        val startedAt = maxOf(System.currentTimeMillis(), lastClosed + 1L)
+        check(prefs.edit().putLong(SESSION_STARTED_AT, startedAt).commit()) {
+            "Could not persist the learning session marker."
+        }
     }
 
     private fun activeSessionMinutesToday(): Int {
@@ -187,23 +191,48 @@ class CurriculumProgressStore(context: Context) {
     }
 
     @Synchronized fun endSession() {
+        endSessionAt(System.currentTimeMillis(), clearSessionMarker = true)
+    }
+
+    /**
+     * Persists the closed-session marker inside encrypted state before clearing the recovery marker.
+     * If the process dies between those writes, the next recovery sees the same start timestamp and
+     * clears the marker without adding the elapsed time twice.
+     */
+    @Synchronized internal fun endSessionAt(nowMillis: Long, clearSessionMarker: Boolean = true) {
+        require(nowMillis > 0L)
         val started = prefs.getLong(SESSION_STARTED_AT, 0L)
-        prefs.edit().remove(SESSION_STARTED_AT).apply()
         if (started <= 0L) return
-        val now = System.currentTimeMillis()
+        val state = readState()
+        if (state.optLong(LAST_CLOSED_SESSION_STARTED_AT, 0L) == started) {
+            if (clearSessionMarker) {
+                check(prefs.edit().remove(SESSION_STARTED_AT).commit()) {
+                    "Could not clear the recovered learning session marker."
+                }
+            }
+            return
+        }
+
         val zone = ZoneId.systemDefault()
-        val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val todayDate = LocalDate.now(zone)
+        val todayStart = todayDate.atStartOfDay(zone).toInstant().toEpochMilli()
         val countedFrom = maxOf(started, todayStart)
-        val elapsed = if (countedFrom >= now) 0 else {
-            val bounded = (now - countedFrom).coerceAtMost(12L * 60L * 60L * 1000L)
+        val elapsed = if (countedFrom >= nowMillis) 0 else {
+            val bounded = (nowMillis - countedFrom).coerceAtMost(12L * 60L * 60L * 1000L)
             kotlin.math.ceil(bounded / 60_000.0).toInt()
         }
-        if (elapsed <= 0) return
-        val state = readState()
-        val today = java.time.LocalDate.now().toString()
+        val today = todayDate.toString()
         val used = if (state.optString("usageDate") == today) state.optInt("usedTodayMinutes", 0) else 0
-        state.put("usageDate", today).put("usedTodayMinutes", (used + elapsed).coerceAtMost(24 * 60))
+        state.put(LAST_CLOSED_SESSION_STARTED_AT, started)
+        if (elapsed > 0) {
+            state.put("usageDate", today).put("usedTodayMinutes", (used + elapsed).coerceAtMost(24 * 60))
+        }
         writeState(state)
+        if (clearSessionMarker) {
+            check(prefs.edit().remove(SESSION_STARTED_AT).commit()) {
+                "Could not clear the completed learning session marker."
+            }
+        }
     }
 
     private fun JSONObject.stringSet(key: String): Set<String> {
@@ -260,6 +289,7 @@ class CurriculumProgressStore(context: Context) {
         private const val PREFS = "shraddha_curriculum_progress_v1"
         private const val ENCRYPTED_STATE = "encrypted_state"
         private const val SESSION_STARTED_AT = "session_started_at"
+        private const val LAST_CLOSED_SESSION_STARTED_AT = "last_closed_session_started_at"
         private const val PIN_SALT = "guardian_pin_salt"
         private const val PIN_HASH = "guardian_pin_hash"
         private const val KEY_ALIAS = "shraddha_curriculum_progress_aes_v1"
