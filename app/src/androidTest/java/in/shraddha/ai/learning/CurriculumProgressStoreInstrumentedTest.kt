@@ -59,4 +59,17 @@ class CurriculumProgressStoreInstrumentedTest {
 
         store.setGuardianMode(false)
     }
+    @Test fun guardianApprovalGrantsOnlyATimeLimitedLearningExtension() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        store.setGuardianPin("5831".toCharArray())
+        store.setGuardianMode(true)
+        val now = System.currentTimeMillis()
+        store.grantGuardianOverrideAt(now, 15)
+        assertTrue(store.hasGuardianOverrideAt(now + 1L))
+        assertTrue(store.hasGuardianOverrideAt(now + 14 * 60_000L))
+        assertFalse(store.hasGuardianOverrideAt(now + 15 * 60_000L))
+        store.setGuardianMode(false)
+    }
+
 }
