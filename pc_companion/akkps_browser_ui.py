@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog, simpledialog
 try:
     from .akkps_browser_operator import AkkpsBrowserOperator, DEFAULT_HOME
 except ImportError:
@@ -56,6 +56,12 @@ class AkkpsBrowserWindow:
         ttk.Button(batch_actions, text="Fill Reviewed Batch", command=self.fill_batch).pack(side="left", padx=6)
         ttk.Label(batch, text="Only exact visible text/select fields are supported. Review every value; this never submits the record.",
                   wraplength=700).pack(anchor="w", pady=(4, 0))
+        workflows = ttk.LabelFrame(root, text="Page-specific workflows", padding=8)
+        workflows.pack(fill="x", pady=(0, 8))
+        ttk.Button(workflows, text="Add AWD repeated row…", command=self.add_awd_row).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Autocomplete…", command=self.autocomplete).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Attach document…", command=self.attach_document).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
@@ -152,6 +158,61 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Batch field entry rejected", str(exc), parent=self.window)
+
+
+    def add_awd_row(self):
+        try:
+            section = simpledialog.askstring("AWD repeated entry", "Exact section name (e.g. Drying events, Fertilizer applications):", parent=self.window)
+            if not section: return
+            button = simpledialog.askstring("AWD repeated entry", "Exact visible Add-row button label:", parent=self.window)
+            if not button: return
+            preview = {"section": section, "button": button, "action": "Add one blank row only", "submit": False}
+            if not messagebox.askyesno("Confirm AWD row", json.dumps(preview, ensure_ascii=False), parent=self.window): return
+            result = self.operator.add_repeated_entry(section, button)
+            self.status.set("AWD row added. Enter and review its values; record NOT submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("AWD row not added", str(exc), parent=self.window)
+
+    def autocomplete(self):
+        try:
+            label = simpledialog.askstring("Autocomplete", "Exact visible field label:", parent=self.window)
+            if not label: return
+            query = simpledialog.askstring("Autocomplete", "Search text (user-confirmed):", parent=self.window)
+            if not query: return
+            option = simpledialog.askstring("Autocomplete", "Exact suggestion to select:", parent=self.window)
+            if not option: return
+            preview = {"field": label, "search": query, "exact_suggestion": option}
+            if not messagebox.askyesno("Confirm autocomplete selection", json.dumps(preview, ensure_ascii=False), parent=self.window): return
+            result = self.operator.choose_autocomplete_option(label, query, option)
+            self.status.set("Autocomplete choice selected and verified. Record NOT submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Autocomplete selection failed", str(exc), parent=self.window)
+
+    def attach_document(self):
+        try:
+            label = simpledialog.askstring("Attach document", "Exact visible upload field label:", parent=self.window)
+            if not label: return
+            path = filedialog.askopenfilename(parent=self.window, title="Choose AKKPS document",
+                filetypes=[("PDF and images", "*.pdf *.jpg *.jpeg *.png")])
+            if not path: return
+            preview = {"field": label, "file_name": Path(path).name, "max_size": "10 MB",
+                       "action": "Attach to form only; upload/submit remains separate"}
+            if not messagebox.askyesno("Confirm document attachment", json.dumps(preview, ensure_ascii=False), parent=self.window): return
+            result = self.operator.attach_document(label, path)
+            self.status.set("Document attached to form. Upload/record submission NOT performed.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Document attachment failed", str(exc), parent=self.window)
+
+    def inspect_map(self):
+        try:
+            result = self.operator.inspect_map_boundary()
+            self.status.set("Map inspected only. No boundary coordinates changed or submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Map inspection failed", str(exc), parent=self.window)
 
     def submit(self):
         if not messagebox.askyesno("Confirm AKKPS submission",
