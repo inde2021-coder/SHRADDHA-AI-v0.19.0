@@ -125,3 +125,11 @@ class ProtocolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AkkpsProtocolTests(unittest.TestCase):
+    def test_akkps_actions_are_argument_free_and_allowlisted(self):
+        from pc_companion.protocol import validate_remote_action
+        for kind in ("akkps_open", "akkps_runner", "akkps_inspect"):
+            self.assertEqual(validate_remote_action({"kind": kind}), {"kind": kind})
+            self.assertIsNone(validate_remote_action({"kind": kind, "script": "bad"}))
