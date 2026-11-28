@@ -210,8 +210,9 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Submit control is not available.")
         before_url = self.page.url
         button.click()
-        self.page.wait_for_load_state("domcontentloaded", timeout=20000)
-        # A click or toast alone is not server-side proof. Caller must run verify_record().
+        # Do not wait for a navigation timeout: an SPA may have accepted the write
+        # without navigating. Report the outcome as uncertain until a record is re-opened.
+        # A click or toast alone is not server-side proof. Caller must verify the record.
         return {"clicked": True, "before_url": before_url, "after_url": self.page.url,
                 "server_record_verified": False, "automatic_retry": False}
 
