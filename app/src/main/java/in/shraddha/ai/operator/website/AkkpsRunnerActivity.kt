@@ -979,8 +979,24 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
+        // Reuse only previously server-verified administrative defaults; never store farmer identity.
+        val commonDefaults = AkkpsLocalCommonFieldMemory.snapshot(this)
+        val commonFieldAliases = listOf(
+            listOf("district", "जिला") to "District",
+            listOf("block", "विकासखंड", "विकास खंड") to "Block",
+            listOf("tehsil", "तहसील") to "Tehsil"
+        )
+        val providedKeys = values.map { AkkpsLocalCommonFieldMemory.normalize(it.first) }.toSet()
+        val rememberedValues = commonFieldAliases.mapNotNull { (aliases, label) ->
+            val normalizedAliases = aliases.map(AkkpsLocalCommonFieldMemory::normalize)
+            val value = normalizedAliases.firstNotNullOfOrNull { key ->
+                commonDefaults.optString(key).takeIf { it.isNotBlank() }
+            }
+            if (value != null && normalizedAliases.none { it in providedKeys }) label to value else null
+        }
+        val effectiveValues = values + rememberedValues
         val payload = JSONArray()
-        values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
+        effectiveValues.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -1096,7 +1112,7 @@ class AkkpsRunnerActivity : Activity() {
                 .setTitle("AKKPS रिकॉर्ड Submit करें?")
                 .setMessage("${out.length()} fields भरी गई हैं। AKKPS form एक बार देख लें। आपकी स्पष्ट अनुमति के बाद ही Submit होगा।")
                 .setNegativeButton("अभी नहीं", null)
-                .setPositiveButton("Confirm Submit") { _, _ -> submitForm(values) }
+                .setPositiveButton("Confirm Submit") { _, _ -> submitForm(effectiveValues) }
                 .show()
         }
     }
@@ -1320,8 +1336,14 @@ Return exact JSON only. Do not include prose or markdown."""
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
-                o?.optBoolean("serverSuccess") == true ->
+                o?.optBoolean("serverSuccess") == true -> {
+                    // Save only district/block/tehsil after the server confirms a record ID.
+                    AkkpsLocalCommonFieldMemory.rememberVerified(
+                        this,
+                        expectedValues.filter { AkkpsLocalCommonFieldMemory.isReusableCommonField(it.first) }
+                    )
                     "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
+                }
                 !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true ->
                     "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save अभी fully verified नहीं है।"
                 o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true ->
