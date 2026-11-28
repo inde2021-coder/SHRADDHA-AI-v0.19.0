@@ -772,12 +772,12 @@ class AkkpsRunnerActivity : Activity() {
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
                 return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id);
               };
-              const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
+              const fields=[...document.querySelectorAll('input,textarea,select,[role=switch],[role=checkbox]')].filter(e=>
                 (visible(e)||(String(e.type||'').toLowerCase()==='checkbox'&&visible(e.closest('label')||e.parentElement)))&&
                 !e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())&&
                 !sensitiveLabel.test(labelFor(e))
               ).map((e,i)=>({
-                index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
+                index:i,tag:e.tagName.toLowerCase(),type:(e.type||e.getAttribute('role')||'').toLowerCase(),
                 name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
                 aria:n(e.getAttribute('aria-label')),label:labelFor(e),
                 required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly
@@ -1158,6 +1158,15 @@ class AkkpsRunnerActivity : Activity() {
                 getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               const checkboxEditable=e=>e.type==='checkbox'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 e.getAttribute('aria-disabled')!=='true'&&visible(e.closest('label')||e.parentElement||e);
+              const switchEditable=e=>['switch','checkbox'].includes(e.getAttribute('role'))&&
+                e.getAttribute('aria-disabled')!=='true'&&e.getAttribute('disabled')===null&&visible(e);
+              const controlLabel=e=>{
+                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean)
+                  .map(id=>document.getElementById(id)?.innerText||'').join(' ');
+                const parent=e.closest('label');
+                return [e.getAttribute('aria-label'),labelledBy,parent?.innerText,e.getAttribute('name'),e.id]
+                  .map(norm);
+              };
               const radioGroups=scope=>{
                 const groups=[];
                 for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
@@ -1195,6 +1204,20 @@ class AkkpsRunnerActivity : Activity() {
                     checkbox.dispatchEvent(new Event('input',{bubbles:true}));
                     checkbox.dispatchEvent(new Event('change',{bubbles:true}));
                     out.push({key:item.key,status:'filled'}); continue;
+                  }
+                  const switchMatches=[...form.querySelectorAll('[role=switch],[role=checkbox]')]
+                    .filter(switchEditable).filter(e=>controlLabel(e).some(v=>v && v===key));
+                  if(switchMatches.length>0){
+                    if(switchMatches.length!==1||item.booleanValue===null){
+                      out.push({key:item.key,status:switchMatches.length!==1?'ambiguous':'explicit_yes_no_required'});continue;
+                    }
+                    const control=switchMatches[0];
+                    const state=control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
+                    if(state!=='true'&&state!=='false'){
+                      out.push({key:item.key,status:'toggle_state_unknown'});continue;
+                    }
+                    if((state==='true')!==(item.booleanValue===true)) control.click();
+                    out.push({key:item.key,status:'filled'});continue;
                   }
                   const groups=radioGroups(form).filter(g=>{
                     const labels=groupLabel(g);
