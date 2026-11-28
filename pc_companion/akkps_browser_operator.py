@@ -80,6 +80,7 @@ class FieldInfo:
     required: bool
     disabled: bool
     read_only: bool = False
+    multiple: bool = False
     options: tuple[str, ...] = ()
 
 
@@ -214,7 +215,7 @@ class AkkpsBrowserOperator:
             .filter(visible).map(e => ({
               label: labelFor(e), name: clean(e.name || e.id),
               type: clean(e.type || e.tagName.toLowerCase()).toLowerCase(),
-              required: !!e.required, disabled: !!e.disabled, readOnly: !!e.readOnly,
+              required: !!e.required, disabled: !!e.disabled, readOnly: !!e.readOnly, multiple: !!e.multiple,
               options: e.tagName === 'SELECT' ? [...e.options].map(o => clean(o.label || o.textContent)).filter(Boolean).slice(0, 80) : []
             }));
           const links = [...document.querySelectorAll('nav a, header a, aside a, [role=navigation] a')]
@@ -241,7 +242,7 @@ class AkkpsBrowserOperator:
             safe_fields.append(FieldInfo(
                 label=label, name=item.get("name", ""), input_type=kind,
                 required=bool(item.get("required")), disabled=bool(item.get("disabled")),
-                read_only=bool(item.get("readOnly")), options=(),
+                read_only=bool(item.get("readOnly")), multiple=bool(item.get("multiple")), options=(),
             ))
         safe_url, safe_title = _safe_runner_location(data["url"])
         safe_links = []
@@ -333,7 +334,7 @@ class AkkpsBrowserOperator:
             field = matches[0]
             if field.disabled or field.read_only:
                 raise RuntimeError(f"Field {label!r} is disabled or read-only.")
-            if field.input_type in SENSITIVE_TYPES or field.input_type in UNFILLABLE_TYPES or field.input_type in {"checkbox", "radio"}:
+            if field.multiple or field.input_type in SENSITIVE_TYPES or field.input_type in UNFILLABLE_TYPES or field.input_type in {"checkbox", "radio"}:
                 raise RuntimeError(f"Field {label!r} is not an auto-fillable text/select field.")
             preview.append({"field": field.label, "value": str(value), "required": field.required})
         return {"page": inventory.title, "url": inventory.url, "changes": preview,
