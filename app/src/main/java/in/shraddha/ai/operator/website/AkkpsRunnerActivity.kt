@@ -132,7 +132,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         if (!incoming.isNullOrBlank() && incoming.length <= 3000) {
-            if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(incoming)) {
+            if (Regex("(?i)\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(incoming)) {
                 status.text = "Credential/OTP सामग्री वाला command रोक दिया गया।"
                 return
             }
@@ -630,7 +630,7 @@ class AkkpsRunnerActivity : Activity() {
                   const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
                   const state=String(parsed?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||'').slice(0,160);
-                  const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
+                  const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary)\b/i.test(path);
                   const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
@@ -757,7 +757,7 @@ class AkkpsRunnerActivity : Activity() {
               const n=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,120);
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
-              const sensitiveLabel=/\\b(password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड/i;
+              const sensitiveLabel=/\b(password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase)\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड/i;
               const labelFor=e=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
@@ -898,7 +898,7 @@ class AkkpsRunnerActivity : Activity() {
         if (raw.isBlank() || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
-        if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
+        if (Regex("(?i)\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
             status.text = "Password, OTP, PIN या CAPTCHA को command में न लिखें। वेबसाइट के login/form में स्वयं दर्ज करें।"; return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
@@ -1462,8 +1462,8 @@ Return exact JSON only. Do not include prose or markdown."""
               const serverFailure=events.some(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&(e.httpStatus>=400||/failed|error|invalid/i.test(e.message||'')));
               const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
               const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
-              const success=/\\b(saved|submitted|created successfully|record saved)\\b|सफलतापूर्वक|जमा हो गया/i;
-              const failure=/\\b(failed|error|invalid|unable to|try again)\\b|त्रुटि|असफल/i;
+              const success=/\b(saved|submitted|created successfully|record saved)\b|सफलतापूर्वक|जमा हो गया/i;
+              const failure=/\b(failed|error|invalid|unable to|try again)\b|त्रुटि|असफल/i;
               const notice=notices.find(x=>success.test(x))||'';
               const failed=notices.some(x=>failure.test(x));
               const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
