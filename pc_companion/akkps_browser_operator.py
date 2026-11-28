@@ -67,6 +67,8 @@ class AkkpsBrowserOperator:
 
     def start(self, start_url: str = DEFAULT_HOME):
         validate_akkps_url(start_url)
+        if self._page is not None:
+            return self.inventory()
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:
