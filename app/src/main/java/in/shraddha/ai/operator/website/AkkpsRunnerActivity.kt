@@ -323,8 +323,6 @@ class AkkpsRunnerActivity : Activity() {
                             }
                             .setPositiveButton("यही KML attach करें") { _, _ ->
                                 pendingBoundaryUploadUri = null
-                                pendingBoundaryUploadPlotId = null
-                                pendingBoundaryUploadPreparedAt = 0L
                                 uploadCallback = null
                                 grantUriPermission(packageName, preparedBoundary, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 callback.onReceiveValue(arrayOf(preparedBoundary))
@@ -1038,6 +1036,7 @@ class AkkpsRunnerActivity : Activity() {
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (result?.optBoolean("verified") == true) {
                 pendingBoundaryUploadPreparedAt = 0L
+                pendingBoundaryUploadPlotId = null
                 val recordId = result.optString("recordId")
                 status.text = "AKKPS boundary write response verified • Record ID: $recordId • अब Plot map Reopen करके polygon दिखना जाँचें।"
                 AlertDialog.Builder(this)
