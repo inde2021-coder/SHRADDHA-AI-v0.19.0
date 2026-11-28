@@ -1021,7 +1021,7 @@ class AkkpsRunnerActivity : Activity() {
                 e.success===true && !!String(e.recordId||'').trim() &&
                 /(boundary|plot|map|kml)/i.test(String(e.path||'')) &&
                 Number(e.at||0)>=preparedAt &&
-                (String(e.recordId||'')===plotId || String(e.path||'').includes(plotId)) &&
+                (String(e.plotId||'')===plotId || String(e.recordId||'')===plotId || String(e.path||'').includes(plotId)) &&
                 Date.now()-Number(e.at||0)<=15*60*1000);
               const last=recent.sort((a,b)=>Number(b.at)-Number(a.at))[0]||null;
               return JSON.stringify(last?{
@@ -1208,11 +1208,14 @@ class AkkpsRunnerActivity : Activity() {
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
                   const path=new URL(url,location.href).pathname;
-                  const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
-                  const state=String(parsed?.status||'').toLowerCase();
-                  const message=String(parsed?.message||parsed?.error||'').slice(0,160);
+                  const data=parsed?.data||{};
+                  const id=parsed?.recordId||parsed?.boundaryId||parsed?.geometryId||parsed?.mapId||parsed?.id||
+                    data?.recordId||data?.boundaryId||data?.geometryId||data?.mapId||data?.id||'';
+                  const plotId=parsed?.plotId||data?.plotId||parsed?.plot?.id||data?.plot?.id||'';
+                  const state=String(parsed?.status||data?.status||'').toLowerCase();
+                  const message=String(parsed?.message||parsed?.error||data?.message||'').slice(0,160);
                   const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary)\b/i.test(path);
-                  const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
+                  const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||data?.success===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
                     method:String(method||'').toUpperCase(),
@@ -1221,6 +1224,7 @@ class AkkpsRunnerActivity : Activity() {
                     httpStatus:Number(status)||0,
                     success:!!success,
                     recordId:String(id||'').slice(0,100),
+                    plotId:String(plotId||'').slice(0,100),
                     message,
                     at:Date.now()
                   });
