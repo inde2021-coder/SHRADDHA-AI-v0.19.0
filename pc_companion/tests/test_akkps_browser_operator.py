@@ -109,6 +109,8 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
                 operator.preview({"Unknown Field": "x"})
             with self.assertRaises(RuntimeError):
                 operator.preview({"Password": "not-allowed"})
+            with self.assertRaises(RuntimeError):
+                operator.preview({"Farmer Gender": "Unknown Option"})
 
     def test_batch_preview_rejects_ambiguous_duplicate_labels(self):
         with tempfile.TemporaryDirectory() as folder:
