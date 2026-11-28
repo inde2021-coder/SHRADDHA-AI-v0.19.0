@@ -32,7 +32,8 @@ data class OperatorStep(
     val target: String = "",
     val value: String = "",
     val expectedVisibleText: String = "",
-    val requiresConfirmation: Boolean = false
+    val requiresConfirmation: Boolean = false,
+    val explicitlyAuthorizedByUser: Boolean = false
 )
 
 enum class OperatorTaskState { IDLE, OBSERVING, EXECUTING, VERIFYING, WAITING_CONFIRMATION, COMPLETED, FAILED, CANCELLED }
