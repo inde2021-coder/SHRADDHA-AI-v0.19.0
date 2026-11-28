@@ -75,6 +75,13 @@ object UniversalVisibleTaskPlanner {
                         }
                     }
                 }
+                OperatorActionType.SELECT_FILE -> {
+                    if (target.isBlank() || !containsMention(userCommand, target)) {
+                        return Result(error = "चुनी जाने वाली file का exact नाम user command में स्पष्ट नहीं है।")
+                    }
+                    if (value.isNotBlank()) return Result(error = "SELECT_FILE step में अतिरिक्त value स्वीकार नहीं है।")
+                    deferredTarget = screenMayHaveChanged
+                }
                 OperatorActionType.TYPE_TEXT -> {
                     val matches = snapshot.elements.filter { e ->
                         e.editable && !e.password && listOf(e.id, e.text, e.description, e.hintText)
@@ -90,7 +97,7 @@ object UniversalVisibleTaskPlanner {
                         return Result(error = "Step $index का typed value user command में नहीं मिला; अनुमानित data रोका गया।")
                     }
                 }
-                OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD -> {
+                OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD -> {
                     if (target.isNotBlank() || value.isNotBlank()) {
                         return Result(error = "Navigation step में target/value नहीं होना चाहिए।")
                     }
@@ -106,7 +113,7 @@ object UniversalVisibleTaskPlanner {
             )
             if (action in setOf(
                     OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT,
-                    OperatorActionType.BACK, OperatorActionType.SCROLL_FORWARD
+                    OperatorActionType.BACK, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD, OperatorActionType.SELECT_FILE
                 )) screenMayHaveChanged = true
         }
         return Result(steps = steps)
