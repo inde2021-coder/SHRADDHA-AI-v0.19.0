@@ -258,6 +258,7 @@ object ActionExecutor {
                 val appName = args.optString("app_name", "").trim()
                 val apps = InstalledAppLabelCache.get(context)
                 val resolution = CommandFollowUpContextRuntime.resolve(appName, CommandReferenceType.APP)
+                val priorAppReference = (resolution as? CommandReferenceResolution.Resolved)?.reference
                 val packageName = when (resolution) {
                     is CommandReferenceResolution.Resolved -> {
                         val remembered = resolution.reference
@@ -280,7 +281,8 @@ object ActionExecutor {
                 val launched = AppLauncher.launch(context, packageName)
                 if (launched) {
                     CommandFollowUpContextRuntime.remember(
-                        CommandReferenceType.APP, packageName, appName.ifBlank { packageName }
+                        CommandReferenceType.APP, packageName,
+                        priorAppReference?.displayLabel ?: appName.ifBlank { packageName }
                     )
                     result.put("status", "success")
                     result.put("action", "app_opened")
