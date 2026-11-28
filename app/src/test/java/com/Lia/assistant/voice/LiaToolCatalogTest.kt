@@ -9,6 +9,9 @@ class LiaToolCatalogTest {
         val declarations = LiaToolCatalog.declarations()
         val names = (0 until declarations.length()).mapNotNull { declarations.optJSONObject(it)?.optString("name") }
         assertTrue(names.contains("open_akkps_runner"))
+        val runnerTool = (0 until declarations.length()).mapNotNull { declarations.optJSONObject(it) }
+            .first { it.optString("name") == "open_akkps_runner" }
+        assertTrue(runnerTool.optJSONObject("parameters")?.optJSONObject("properties")?.has("command") == true)
         assertTrue(names.contains("control_paired_pc"))
         val pcTool = (0 until declarations.length()).mapNotNull { declarations.optJSONObject(it) }
             .first { it.optString("name") == "control_paired_pc" }
