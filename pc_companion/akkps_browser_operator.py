@@ -341,7 +341,7 @@ class AkkpsBrowserOperator:
         if count == 0:
             # Inventory labels may fall back to placeholder or the DOM name/id
             # when the site omits a real <label for=...> association.
-            matches = self.page.get_by_placeholder(label, exact=True)
+            matches = form.get_by_placeholder(label, exact=True)
             count = matches.count()
         if count == 0:
             all_fields = form.locator("input,select,textarea")
@@ -391,6 +391,53 @@ class AkkpsBrowserOperator:
             preview.append({"field": field.label, "value": str(value), "required": field.required})
         return {"page": inventory.title, "url": inventory.url, "changes": preview,
                 "requires_user_confirmation": True, "submitted": False}
+
+    def fill_reviewed_fields(self, values: dict[str, str]):
+        """Pre-validate every exact label, then fill a reviewed batch without submitting."""
+        if not isinstance(values, dict) or not values or len(values) > 100:
+            raise ValueError("Provide 1–100 field-label/value pairs.")
+        preview = self.preview(values)
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("The page form changed after preview; no fields were filled.")
+        form = forms.first
+        planned = []
+        for label, value in values.items():
+            matches = form.get_by_label(label, exact=True)
+            if matches.count() == 0:
+                matches = form.get_by_placeholder(label, exact=True)
+            if matches.count() == 0:
+                all_fields = form.locator("input,select,textarea")
+                indexes = all_fields.evaluate_all(
+                    "(elements, exact) => elements.map((e, i) => ({i, match: e.name === exact || e.id === exact || e.placeholder === exact})).filter(x => x.match).map(x => x.i)",
+                    label,
+                )
+                if len(indexes) == 1:
+                    matches = all_fields.nth(indexes[0])
+            if matches.count() != 1:
+                raise RuntimeError(f"Field {label!r} changed or became ambiguous; no fields were filled.")
+            field = matches.first
+            field_type = (field.get_attribute("type") or "").lower()
+            if not field.is_visible() or not field.is_enabled() or field.get_attribute("readonly") is not None:
+                raise RuntimeError(f"Field {label!r} is no longer editable; no fields were filled.")
+            if field_type in SENSITIVE_TYPES | UNFILLABLE_TYPES or SENSITIVE_LABEL.search(label):
+                raise RuntimeError(f"Field {label!r} is sensitive or not fillable.")
+            if field_type in {"checkbox", "radio"} or field.get_attribute("multiple") is not None:
+                raise RuntimeError(f"Field {label!r} requires a dedicated choice handler.")
+            planned.append((label, str(value), field))
+        # Recheck the page URL and form identity immediately before any write.
+        validate_runner_url(self.page.url)
+        if self.page.locator("form:visible").count() != 1:
+            raise RuntimeError("The form changed before field entry; no fields were filled.")
+        filled = []
+        for label, value, field in planned:
+            if field.evaluate("(e) => e.tagName.toLowerCase()") == "select":
+                field.select_option(label=value)
+            else:
+                field.fill(value)
+            filled.append(label)
+        return {"page": preview["page"], "filled_fields": filled,
+                "submitted": False, "requires_separate_submit_confirmation": True}
 
     def submit_after_confirmation(self, confirmation: str):
         """Submit only after exact confirmation; verify a record ID or leave outcome uncertain."""
