@@ -1204,7 +1204,9 @@ class AkkpsRunnerActivity : Activity() {
                               const buttons=[...forms[0].querySelectorAll('button,input[type=button], [role=button]')]
                                 .filter(visible).filter(e=>{
                                   const type=String(e.getAttribute('type')||'').toLowerCase();
-                                  if(type==='submit' || e.matches('input[type=submit]')) return false;
+                                  // A form <button> defaults to submit when type is omitted; reject it.
+                                  if((e.tagName==='BUTTON' && type!=='button') ||
+                                     (e.tagName==='INPUT' && type!=='button')) return false;
                                   const label=norm(e.innerText||e.value||e.getAttribute('aria-label')||e.title);
                                   return label===wanted;
                                 });
