@@ -529,6 +529,142 @@ class AkkpsBrowserOperator:
             "automatic_retry": False
         }
 
+
+    def add_repeated_entry(self, section_label: str, add_button_label: str):
+        """Add one AWD/repeater row only; never submit or infer row contents."""
+        section_label = " ".join(str(section_label or "").split())
+        add_button_label = " ".join(str(add_button_label or "").split())
+        allowed_sections = {
+            "drying events", "drying event dates", "re-flooding events",
+            "reflooding dates", "fertilizer applications", "field visits",
+            "historical yields", "water level readings"
+        }
+        normalized = section_label.casefold()
+        if normalized not in allowed_sections:
+            raise ValueError("Only known AWD repeated-entry sections are supported.")
+        if not add_button_label or len(add_button_label) > 80 or SENSITIVE_LABEL.search(add_button_label):
+            raise ValueError("A safe, exact visible Add-row label is required.")
+        validate_runner_url(self.page.url)
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible AWD form.")
+        form = forms.first
+        heading = self.page.get_by_text(section_label, exact=True)
+        if heading.count() != 1 or not heading.first.is_visible():
+            raise RuntimeError("The repeated-entry section is missing or ambiguous.")
+        add = form.get_by_role("button", name=add_button_label, exact=True)
+        if add.count() != 1 or not add.first.is_visible() or not add.first.is_enabled():
+            raise RuntimeError("The exact Add-row control is missing, ambiguous or disabled.")
+        before = form.locator("input,select,textarea").count()
+        add.first.click()
+        self.page.wait_for_timeout(250)
+        after = form.locator("input,select,textarea").count()
+        if after <= before:
+            raise RuntimeError("No new visible form fields appeared; row addition was not verified.")
+        return {"section": section_label, "fields_before": before, "fields_after": after,
+                "row_added": True, "submitted": False,
+                "next_step": "Inspect the new row and enter only user-confirmed values."}
+
+    def choose_autocomplete_option(self, field_label: str, query: str, exact_option: str):
+        """Choose one exact visible autocomplete suggestion after a user-reviewed query."""
+        field_label = " ".join(str(field_label or "").split())
+        query = str(query or "").strip()
+        exact_option = " ".join(str(exact_option or "").split())
+        if not field_label or not query or not exact_option or len(query) > 160 or len(exact_option) > 160:
+            raise ValueError("Field label, search text and exact suggestion are required.")
+        if SENSITIVE_LABEL.search(field_label):
+            raise ValueError("Sensitive fields cannot use autocomplete automation.")
+        validate_runner_url(self.page.url)
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible form.")
+        form = forms.first
+        field = form.get_by_label(field_label, exact=True)
+        if field.count() == 0:
+            field = form.get_by_placeholder(field_label, exact=True)
+        if field.count() != 1 or not field.first.is_visible() or not field.first.is_enabled():
+            raise RuntimeError("Autocomplete field is missing, ambiguous or disabled.")
+        field.first.fill(query)
+        suggestions = self.page.get_by_role("option", name=exact_option, exact=True)
+        count = suggestions.count()
+        if count != 1 or not suggestions.first.is_visible() or not suggestions.first.is_enabled():
+            raise RuntimeError("The exact autocomplete suggestion is not uniquely visible; nothing was selected.")
+        suggestions.first.click()
+        self.page.wait_for_timeout(150)
+        still_visible = self.page.get_by_role("option", name=exact_option, exact=True).count()
+        non_empty = field.first.evaluate("(e) => Boolean(e.value && e.value.trim())")
+        if still_visible or not non_empty:
+            raise RuntimeError("Autocomplete selection could not be verified; review the field manually.")
+        return {"field": field_label, "selected_option": exact_option,
+                "selection_verified": True, "submitted": False}
+
+    def attach_document(self, field_label: str, file_path: str | Path):
+        """Attach a user-selected document to one exact file input; does not upload/submit."""
+        from pathlib import Path
+        path = Path(file_path).expanduser().resolve()
+        allowed = {".pdf", ".jpg", ".jpeg", ".png"}
+        if not path.is_file() or path.suffix.casefold() not in allowed:
+            raise ValueError("Choose an existing PDF, JPG or PNG document.")
+        if path.stat().st_size <= 0 or path.stat().st_size > 10 * 1024 * 1024:
+            raise ValueError("Document must be non-empty and no larger than 10 MB.")
+        label = " ".join(str(field_label or "").split())
+        if not label or SENSITIVE_LABEL.search(label):
+            raise ValueError("A safe exact document field label is required.")
+        validate_runner_url(self.page.url)
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible form.")
+        form = forms.first
+        candidates = form.locator('input[type="file"]')
+        matches = []
+        for index in range(candidates.count()):
+            item = candidates.nth(index)
+            accessible = item.get_attribute("aria-label") or item.get_attribute("name") or item.get_attribute("id") or ""
+            labels = item.evaluate("(e) => [...(e.labels || [])].map(x => (x.innerText || '').trim())")
+            if label == accessible or label in labels:
+                matches.append(item)
+        if len(matches) != 1:
+            raise RuntimeError("Exact document upload field is missing or ambiguous.")
+        target = matches[0]
+        accept = (target.get_attribute("accept") or "").casefold()
+        extension_mime = {".pdf": "application/pdf", ".jpg": "image/jpeg",
+                          ".jpeg": "image/jpeg", ".png": "image/png"}
+        if accept and not any(token.strip() in {path.suffix.casefold(), extension_mime[path.suffix.casefold()]}
+                              for token in accept.split(",")):
+            raise ValueError("Selected document type is not allowed by this upload field.")
+        target.set_input_files(str(path))
+        count = target.evaluate("(e) => e.files ? e.files.length : 0")
+        if count != 1:
+            raise RuntimeError("Document selection could not be verified.")
+        return {"field": label, "file_attached": True, "file_count": count,
+                "upload_submitted": False, "record_submitted": False}
+
+    def inspect_map_boundary(self):
+        """Inspect visible map/drawing controls without reading coordinates or changing geometry."""
+        validate_runner_url(self.page.url)
+        data = self.page.evaluate("""() => {
+          const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+          const clean = e => (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '')
+            .replace(/\\s+/g, ' ').trim().slice(0, 100);
+          const maps = [...document.querySelectorAll(
+            '.leaflet-container, .mapboxgl-map, [role=application], [aria-label*=map i], canvas'
+          )].filter(visible).slice(0, 12).map(e => ({
+            kind: e.classList.contains('leaflet-container') ? 'leaflet' :
+              e.classList.contains('mapboxgl-map') ? 'mapbox' :
+              e.tagName.toLowerCase() === 'canvas' ? 'canvas' : 'application',
+            label: clean(e), width: Math.round(e.getBoundingClientRect().width),
+            height: Math.round(e.getBoundingClientRect().height)
+          }));
+          const controls = [...document.querySelectorAll('button,[role=button]')].filter(visible)
+            .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
+            .slice(0, 40);
+          return {maps, controls};
+        }""")
+        return {"page": _safe_runner_location(self.page.url)[1],
+                "maps": data["maps"], "boundary_controls": data["controls"],
+                "geometry_changed": False, "submitted": False,
+                "note": "No coordinates or farmer records were read. Draw/save only through a verified page-specific workflow."}
+
     def export_inventory(self, destination: str | Path):
         inventory = self.inventory()
         Path(destination).write_text(
