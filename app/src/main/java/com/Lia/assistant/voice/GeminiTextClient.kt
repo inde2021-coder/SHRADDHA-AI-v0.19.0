@@ -1,5 +1,6 @@
 package com.Lia.assistant.voice
 
+import android.content.Context
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,7 +42,14 @@ object GeminiTextClient {
             .digest(apiKey.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
+    @Deprecated("Pass Android Context so online AI consent can be checked.")
     suspend fun resolveModel(apiKey: String): String {
+        require(apiKey.isNotBlank()) { "Gemini API key is missing." }
+        error("Android Context is required to verify online AI consent before model discovery.")
+    }
+
+    suspend fun resolveModel(context: Context, apiKey: String): String {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val cacheKey = credentialFingerprint(apiKey)
         resolvedModels[cacheKey]?.let { return it }
 
@@ -53,6 +61,7 @@ object GeminiTextClient {
             .build()
 
         try {
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     // A transient catalog outage must not be cached as a permanent
@@ -116,11 +125,21 @@ object GeminiTextClient {
         }
     }
 
+    @Deprecated("Pass Android Context so online AI consent can be checked.")
+    fun reply(apiKey: String, systemInstruction: String, history: List<ChatTurn>): ChatReplyResult =
+        ChatReplyResult.Error("Android Context is required to verify online AI consent. No provider request was sent.")
+
     fun reply(
+        context: Context,
         apiKey: String,
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
+        }
+        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, "GEMINI") }
+            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         if (apiKey.isBlank()) {
             return ChatReplyResult.Error("Gemini API key is missing. Please add it in Settings.")
         }
@@ -135,7 +154,7 @@ object GeminiTextClient {
         }
 
         val modelName = runCatching {
-            kotlinx.coroutines.runBlocking { resolveModel(apiKey) }
+            kotlinx.coroutines.runBlocking { resolveModel(context, apiKey) }
         }.getOrDefault("models/gemini-3.8-flash")
 
         val modelEndpoint = if (modelName.startsWith("models/")) modelName else "models/$modelName"
@@ -173,6 +192,7 @@ object GeminiTextClient {
         var lastTransientError: String? = null
         for (attempt in 0..2) {
             try {
+                `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
                 internalHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         val code = response.code
@@ -198,6 +218,9 @@ object GeminiTextClient {
                     }
 
                     val body = response.body?.string().orEmpty()
+                    if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                        return ChatReplyResult.Error("Online AI consent was revoked while the request was running. The response was discarded.")
+                    }
                     val json = JSONObject(body)
                     val candidates = json.optJSONArray("candidates")
                     if (candidates == null || candidates.length() == 0) {
@@ -214,6 +237,11 @@ object GeminiTextClient {
                             val input = metadata.optLong("promptTokenCount", -1L)
                             val output = metadata.optLong("candidatesTokenCount", -1L)
                             if (input >= 0L && output >= 0L) ProviderTokenUsage("GEMINI", modelName.removePrefix("models/"), input, output) else null
+                        }
+                        if (usage == null) {
+                            `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, "GEMINI", modelName.removePrefix("models/"))
+                        } else {
+                            `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, usage)
                         }
                         return ChatReplyResult.Success(text, usage)
                     }

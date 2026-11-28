@@ -96,6 +96,10 @@ object ShraddhaSpeechClient {
         language: String,
         done: (Result<ByteArray>) -> Unit
     ) {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            done(Result.failure(IllegalStateException("Online AI is disabled. Speech text was not sent to the voice gateway.")))
+            return
+        }
         val clean = text.trim().take(6000)
         if (clean.isBlank()) {
             done(Result.failure(IllegalArgumentException("Speech text is empty")))
@@ -120,6 +124,10 @@ object ShraddhaSpeechClient {
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body)
             .build()
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            done(Result.failure(IllegalStateException("Online AI consent was revoked before speech synthesis.")))
+            return
+        }
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 done(Result.failure(e))
@@ -127,6 +135,10 @@ object ShraddhaSpeechClient {
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                        done(Result.failure(IllegalStateException("Online AI consent was revoked while speech synthesis was running. Audio was discarded.")))
+                        return
+                    }
                     if (!it.isSuccessful) {
                         val message = it.body?.string().orEmpty().take(300)
                         done(Result.failure(IllegalStateException("Shraddha voice engine unavailable (HTTP ${it.code}): ${message.ifBlank { "Check the configured custom TTS service." }}")))

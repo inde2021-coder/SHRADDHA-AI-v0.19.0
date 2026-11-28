@@ -20,6 +20,7 @@ object PluginGatewayClient {
             .put("actionIndex", actionIndex).put("confirmed", true))
 
     private fun post(context: Context, path: String, payload: JSONObject): JSONObject {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = VoiceGatewaySettings.get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         require(config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()) {
@@ -28,8 +29,12 @@ object PluginGatewayClient {
         val request = Request.Builder().url(config.baseUrl.trimEnd('/') + path)
             .header("Authorization", "Bearer " + config.gatewayToken)
             .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while the plugin request was running. The response was discarded.")
+            }
             val json = runCatching { JSONObject(raw) }.getOrElse { error("Gateway returned invalid JSON.") }
             if (!response.isSuccessful) error(json.optString("error").ifBlank { "Plugin gateway failed (HTTP ${response.code})." })
             return json

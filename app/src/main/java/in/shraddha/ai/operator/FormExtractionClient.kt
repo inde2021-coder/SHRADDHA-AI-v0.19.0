@@ -36,6 +36,7 @@ object FormExtractionClient {
         cloudProcessingConsent: Boolean,
         personalDataConsent: Boolean = false
     ): Result<FormExtractionResult> = runCatching {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         require(cloudProcessingConsent) { "Please approve cloud image processing before sending this image." }
         require(formType in setOf("farmer", "plot", "boundary", "land_deed", "consent", "unknown")) { "Unsupported form type." }
         require(provider in setOf("auto", "gemini", "openai", "anthropic")) { "Unsupported vision provider." }
@@ -45,12 +46,17 @@ object FormExtractionClient {
         }
         val bytes = compressForUpload(image)
         require(bytes.size <= 3_100_000) { "Image is too large after compression. Crop it and try again." }
+        val imageBase64 = try {
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } finally {
+            bytes.fill(0)
+        }
         val body = JSONObject()
             .put("formType", formType)
             .put("instruction", instruction.take(1500))
             .put("provider", provider)
             .put("mimeType", "image/jpeg")
-            .put("imageBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .put("imageBase64", imageBase64)
             .put("cloudProcessingConsent", true)
             .put("personalDataConsent", personalDataConsent)
             .toString()
@@ -60,8 +66,12 @@ object FormExtractionClient {
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body)
             .build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while extraction was running. The response was discarded.")
+            }
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw IllegalStateException(message.ifBlank { "Form extraction failed (HTTP ${response.code})" })

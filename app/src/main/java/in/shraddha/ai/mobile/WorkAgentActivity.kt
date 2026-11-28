@@ -654,7 +654,7 @@ class WorkAgentActivity : AppCompatActivity() {
         status.text = "AI सोच रहा है…"
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                if (provider == "GEMINI") GeminiTextClient.reply(ApiKeyStore.getKey(this@WorkAgentActivity), system, snapshot)
+                if (provider == "GEMINI") GeminiTextClient.reply(this@WorkAgentActivity, ApiKeyStore.getKey(this@WorkAgentActivity), system, snapshot)
                 else MultiProviderChatClient.reply(this@WorkAgentActivity, provider, system, snapshot)
             }
             busy = false

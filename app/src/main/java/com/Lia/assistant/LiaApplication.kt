@@ -1,6 +1,7 @@
 package com.Lia.assistant
 
 import android.app.Application
+import `in`.shraddha.ai.link.DeviceLinkManager
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -9,6 +10,7 @@ import java.util.Locale
 class LiaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        DeviceLinkManager.initialize(this)
         installCrashHandler()
     }
 

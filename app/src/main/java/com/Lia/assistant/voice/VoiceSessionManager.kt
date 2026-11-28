@@ -94,6 +94,15 @@ object VoiceSessionManager {
     fun start(context: Context) {
         if (_isActive.value) return
         val application = context.applicationContext
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(application)) {
+            appContext = application
+            _lastError.value = "Online AI is disabled. Enable Allow Online AI in Settings > Connections before starting cloud voice."
+            _statusText.value = "Enable Online AI in Settings"
+            _state.value = NovaOrbState.ERROR
+            _isActive.value = false
+            _muted.value = true
+            return
+        }
         if (ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             appContext = application
             _lastError.value = "Microphone permission is required before starting a voice session."
@@ -248,6 +257,13 @@ object VoiceSessionManager {
         val currentContext = appContext ?: return
         val currentEpoch = expectedEpoch ?: sessionEpoch.incrementAndGet()
         if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
+            _lastError.value = "Online AI consent is off. The cloud voice session was stopped."
+            _state.value = NovaOrbState.ERROR
+            _statusText.value = "Online AI disabled"
+            stop()
+            return
+        }
         cancelToolJobs()
 
         synchronized(clientLock) {
@@ -286,6 +302,14 @@ object VoiceSessionManager {
             return
         }
 
+        // Recheck consent after the token request; revocation must not open a Live socket.
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
+            _lastError.value = "Online AI consent was revoked during connection. Cloud voice was stopped."
+            _state.value = NovaOrbState.ERROR
+            _statusText.value = "Online AI disabled"
+            stop()
+            return
+        }
         // The user may stop while the ephemeral token request is in flight. Never
         // create a WebSocket client or restart the microphone for a stale session.
         if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
@@ -521,8 +545,15 @@ object VoiceSessionManager {
 
         val nextClient = GeminiLiveClient(liveListener, assistantName)
         synchronized(clientLock) {
-            if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch ||
+                !`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
                 nextClient.disconnect()
+                if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
+                    _lastError.value = "Online AI consent was revoked before voice connection."
+                    _state.value = NovaOrbState.ERROR
+                    _statusText.value = "Online AI disabled"
+                    stop()
+                }
                 return
             }
             client = nextClient
