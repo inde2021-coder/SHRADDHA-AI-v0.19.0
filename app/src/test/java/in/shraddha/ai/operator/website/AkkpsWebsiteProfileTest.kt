@@ -46,6 +46,7 @@ class AkkpsWebsiteProfileTest {
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/coordinator/plots"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/../admin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/%2e%2e/admin"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/%252e%252e/admin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner%2f..%2fadmin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner\\\\..\\\\admin"))
     }
