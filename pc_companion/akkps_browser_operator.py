@@ -1083,7 +1083,9 @@ class AkkpsBrowserOperator:
                 f"Expected one visible AKKPS Plot map container; found {map_locator.count()}. "
                 "Inspect the authenticated page before choosing a map target."
             )
-        button = self.page.get_by_role("button", name=label, exact=True)
+        # Only controls inside the uniquely identified map container are eligible.
+        # Page-level Edit/Save buttons must never be mistaken for map tools.
+        button = map_locator.first.get_by_role("button", name=label, exact=True)
         if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
             raise RuntimeError("The exact visible map tool button is missing, ambiguous or disabled.")
         if (button.first.get_attribute("type") or "").casefold() in {"submit", "reset"}:
