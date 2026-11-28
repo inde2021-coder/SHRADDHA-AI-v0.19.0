@@ -16,9 +16,9 @@ object OperatorSafetyPolicy {
     private val genericCodePattern = Regex("(?i)\\bcode\\b")
     private val separatedSecretTokens = setOf("otp", "pin", "cvv", "ओटीपी", "पिन")
     private val zeroWidthCharacters = Regex("[\\u200B-\\u200D\\uFEFF]")
-    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
+    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "share", "forward", "follow", "unfollow", "comment", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
     private val finalButtonLabels = setOf(
-        "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post",
+        "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post", "share", "forward", "follow", "unfollow", "comment",
         "भेजें", "भेजो", "सबमिट", "भुगतान", "अभी भुगतान करें", "पुष्टि करें", "हटाएं", "मिटाएं", "प्रकाशित करें"
     )
     private fun normalize(value: String): String =
