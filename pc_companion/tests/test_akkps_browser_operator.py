@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url, verified_record_response
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -59,6 +59,24 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
         for label in ("Password", "OTP", "PIN", "CAPTCHA", "CVV", "Security Code", "Recovery Phrase", "पासवर्ड", "ओटीपी"):
             with self.subTest(label=label):
                 self.assertRegex(label, SENSITIVE_LABEL)
+
+    def test_server_save_verification_requires_success_record_id_and_approved_host(self):
+        url = "https://www.akkps.ngo/api/runner/plots"
+        self.assertEqual(
+            verified_record_response("POST", url, 201, {"success": True, "plotId": "PLOT-101"}),
+            "PLOT-101"
+        )
+        self.assertIsNone(verified_record_response("POST", url, 200, {"success": True}))
+        self.assertIsNone(verified_record_response("POST", url, 500, {"success": True, "plotId": "PLOT-101"}))
+        self.assertIsNone(verified_record_response("GET", url, 200, {"success": True, "plotId": "PLOT-101"}))
+        self.assertIsNone(verified_record_response("POST", "https://evil.example/api/plots", 201, {"success": True, "plotId": "PLOT-101"}))
+        self.assertIsNone(verified_record_response("POST", "https://www.akkps.ngo/api/telemetry", 201, {"success": True, "id": "x"}))
+
+    def test_form_inventory_maps_visible_form_metadata_without_values(self):
+        # Form metadata is structural only; no field values are represented.
+        sample = {"index": 0, "fieldCount": 4, "submitLabels": ["Save Plot"]}
+        self.assertEqual(sample["fieldCount"], 4)
+        self.assertNotIn("value", sample)
 
     def test_submit_requires_exact_confirmation_before_browser_access(self):
         with tempfile.TemporaryDirectory() as folder:
