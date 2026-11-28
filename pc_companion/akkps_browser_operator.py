@@ -50,7 +50,8 @@ def _is_explicit_submit_label(label: str) -> bool:
     normalized = " ".join(re.sub(r"[^\w\u0900-\u097f]+", " ", str(label or "").casefold()).split())
     return normalized in {
         "submit", "submit report", "submit plot", "submit registration",
-        "submit farmer", "submit awd report", "जमा करें", "सबमिट", "सबमिट करें", "भेजें"
+        "submit farmer", "submit farmer registration", "submit awd", "submit awd report",
+        "जमा करें", "जमा करो", "सबमिट", "सबमिट करें", "भेजें", "भेजो"
     }
 
 
