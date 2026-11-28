@@ -981,7 +981,9 @@ class AkkpsBrowserOperator:
         if len(selected_kml) != 1:
             raise RuntimeError("Select exactly one reviewed KML boundary file before portal upload.")
         route_plot_id = _runner_plot_route_id(self.page.url)
-        if route_plot_id and route_plot_id not in Path(selected_kml[0]).stem.casefold():
+        if not route_plot_id:
+            raise RuntimeError("The active URL does not identify one exact Plot record; boundary upload is blocked.")
+        if route_plot_id not in Path(selected_kml[0]).stem.casefold():
             raise RuntimeError("Selected KML does not match the active Plot ID; upload was blocked.")
         button = forms.first.get_by_role("button", name=label, exact=True)
         if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
@@ -1033,19 +1035,25 @@ class AkkpsBrowserOperator:
         route = before.path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
             raise RuntimeError("Open the same AKKPS Runner Plot page before reopening the saved boundary.")
+        plot_id_before = _runner_plot_route_id(before_url)
+        if not plot_id_before:
+            raise RuntimeError("The current URL does not identify one exact Plot record; reopen verification is blocked.")
         self.page.reload(wait_until="domcontentloaded", timeout=30000)
         self.page.wait_for_timeout(900)
         validate_runner_url(self.page.url)
         after = urlparse(self.page.url)
-        if after.netloc.casefold() != before.netloc.casefold() or after.path.casefold().rstrip("/") != route:
-            raise RuntimeError("AKKPS did not reopen the same Plot route; persistence remains unverified.")
+        plot_id_after = _runner_plot_route_id(self.page.url)
+        if (after.netloc.casefold() != before.netloc.casefold() or
+                after.path.casefold().rstrip("/") != route or
+                plot_id_after != plot_id_before):
+            raise RuntimeError("AKKPS did not reopen the same Plot record; persistence remains unverified.")
         evidence = self.verify_map_boundary_layers()
         map_count = len(evidence.get("maps", []))
         layer_evidence = evidence.get("layer_evidence", {})
         visible_hints = sum(int(value or 0) for value in layer_evidence.values())
         return {
-            "reopened": True, "same_plot_route": True, "record_id": record_id,
-            "map_count_after_reload": map_count,
+            "reopened": True, "same_plot_route": True, "plot_id": plot_id_before,
+            "record_id": record_id, "map_count_after_reload": map_count,
             "visible_vector_layer_hints_after_reload": visible_hints,
             "polygon_persistence_verified": False,
             "outcome": "map_reopened_with_layer_hints" if map_count == 1 and visible_hints > 0 else "reopened_but_boundary_not_visibly_confirmed",
