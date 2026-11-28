@@ -50,7 +50,7 @@ object AkkpsFieldAliasCatalog {
         "baseline practice continuous flooding" to "baselineContinuousFlooding", "क्या लगातार बाढ़ सिंचाई होती है" to "baselineContinuousFlooding",
         "previous irrigation method" to "previousIrrigationMethod", "पिछली सिंचाई विधि" to "previousIrrigationMethod",
         "kharif season water source" to "kharifWaterSource", "खरीफ जल स्रोत" to "kharifWaterSource",
-        "typical water depth" to "typicalWaterDepthCm", "सामान्य जल गहराई" to "typicalWaterDepthCm",
+        "typical water depth" to "typicalWaterDepthCm", "typical water depth cm" to "typicalWaterDepthCm", "सामान्य जल गहराई" to "typicalWaterDepthCm",
         "irrigations per season" to "irrigationsPerSeason", "प्रति मौसम सिंचाई" to "irrigationsPerSeason",
         "crop duration" to "cropDurationDays", "फसल अवधि" to "cropDurationDays",
         "year" to "year", "वर्ष" to "year", "season" to "season", "मौसम" to "season",
@@ -61,6 +61,7 @@ object AkkpsFieldAliasCatalog {
         "does the plot have an inlet and outlet micro irrigation system" to "inletOutletMicroIrrigation",
         "inlet and outlet" to "inletOutletMicroIrrigation",
         "does the farmer want to change from continuous flooding to intermittent flooding" to "farmerWantsIntermittentFlooding",
+        "does the farmer have complete control over the water level in the field" to "farmerControlsWaterLevel",
         "complete control over the water level in the field" to "farmerControlsWaterLevel",
         "field water tube used" to "fieldWaterTubeUsed", "खेत में जल ट्यूब" to "fieldWaterTubeUsed",
         "water level at each visit" to "waterLevelAtEachVisit", "हर दौरे पर जल स्तर" to "waterLevelAtEachVisit",
@@ -110,7 +111,7 @@ object AkkpsFieldAliasCatalog {
         "fertilizer application dates" to "fertilizerApplicationDates",
         "drying event dates" to "dryingEventDates", "re flooding dates" to "refloodingDates",
         "re-flooding dates" to "refloodingDates",
-        "year" to "year", "season" to "season", "yield" to "yield"
+        "year" to "year", "season" to "season", "yield" to "yield", "yield qtl acre" to "yield"
     )
 
     fun normalizeLabel(raw: String): String =
