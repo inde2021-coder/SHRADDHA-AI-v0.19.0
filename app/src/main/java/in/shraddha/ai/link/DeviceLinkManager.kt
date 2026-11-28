@@ -74,12 +74,14 @@ object DeviceLinkManager {
 
                 override fun onResponse(call: Call, response: Response) {
                     response.use {
-                        synchronized(aiCallLock) { activeAiCalls.remove(call) }
                         val raw = it.body?.string().orEmpty()
-                        if (!onlineAiAllowed()) {
-                            done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
-                        } else {
-                            done(parse(it, raw))
+                        synchronized(aiCallLock) {
+                            activeAiCalls.remove(call)
+                            if (!onlineAiAllowed()) {
+                                done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
+                            } else {
+                                done(parse(it, raw))
+                            }
                         }
                     }
                 }
