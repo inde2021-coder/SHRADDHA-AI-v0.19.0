@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url, verified_record_response
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, FieldInfo, PageInventory, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url, verified_record_response
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -85,6 +85,42 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
         sample = {"index": 0, "fieldCount": 4, "submitLabels": ["Save Plot"]}
         self.assertEqual(sample["fieldCount"], 4)
         self.assertNotIn("value", sample)
+
+    def test_batch_preview_requires_unique_visible_non_sensitive_fields(self):
+        with tempfile.TemporaryDirectory() as folder:
+            operator = AkkpsBrowserOperator(folder)
+            operator.inventory = lambda: PageInventory(
+                url="https://www.akkps.ngo/runner/farmers/new",
+                title="New Farmer", links=(),
+                fields=(
+                    FieldInfo("Farmer Name", "name", "text", True, False),
+                    FieldInfo("Phone Number", "phone", "tel", True, False),
+                    FieldInfo("Password", "password", "password", False, False),
+                ),
+                buttons=(), table_headers=()
+            )
+            preview = operator.preview({"Farmer Name": "Test Farmer", "Phone Number": "9999999999"})
+            self.assertEqual(len(preview["changes"]), 2)
+            self.assertFalse(preview["submitted"])
+            with self.assertRaises(RuntimeError):
+                operator.preview({"Unknown Field": "x"})
+            with self.assertRaises(RuntimeError):
+                operator.preview({"Password": "not-allowed"})
+
+    def test_batch_preview_rejects_ambiguous_duplicate_labels(self):
+        with tempfile.TemporaryDirectory() as folder:
+            operator = AkkpsBrowserOperator(folder)
+            operator.inventory = lambda: PageInventory(
+                url="https://www.akkps.ngo/runner/farmers/new",
+                title="New Farmer", links=(),
+                fields=(
+                    FieldInfo("Remarks", "farmerRemarks", "text", False, False),
+                    FieldInfo("Remarks", "plotRemarks", "text", False, False),
+                ),
+                buttons=(), table_headers=()
+            )
+            with self.assertRaises(RuntimeError):
+                operator.preview({"Remarks": "Ambiguous"})
 
     def test_submit_requires_exact_confirmation_before_browser_access(self):
         with tempfile.TemporaryDirectory() as folder:
