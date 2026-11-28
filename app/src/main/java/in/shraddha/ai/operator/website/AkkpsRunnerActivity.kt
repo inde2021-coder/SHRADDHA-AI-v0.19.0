@@ -123,12 +123,14 @@ class AkkpsRunnerActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val incoming = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()
+        val inspectRequested = intent.getBooleanExtra(EXTRA_RUNNER_INSPECT, false)
+        intent.removeExtra(EXTRA_RUNNER_COMMAND)
+        intent.removeExtra(EXTRA_RUNNER_INSPECT)
         if (submitVerificationPending || submitNeedsManualReview || submitConfirmationPending || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress) {
             status.text = "पिछला AKKPS command/Submit अभी पूरा नहीं हुआ। नया command नहीं चलाया गया।"
             return
         }
-        val incoming = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()
-        intent.removeExtra(EXTRA_RUNNER_COMMAND)
         if (!incoming.isNullOrBlank() && incoming.length <= 3000) {
             if (Regex("(?i)\\b(password|passcode|otp|pin|captcha|security code|verification code)\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(incoming)) {
                 status.text = "Credential/OTP सामग्री वाला command रोक दिया गया।"
@@ -137,8 +139,7 @@ class AkkpsRunnerActivity : Activity() {
             pendingAiCommand = incoming
             if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty()) != null) dispatchPendingAiCommand(web.url.orEmpty())
         }
-        pendingInspectOnLoad = intent.getBooleanExtra(EXTRA_RUNNER_INSPECT, false)
-        intent.removeExtra(EXTRA_RUNNER_INSPECT)
+        pendingInspectOnLoad = inspectRequested
         if (pendingInspectOnLoad && AkkpsRunnerRouteCatalog.match(web.url.orEmpty()) != null) {
             dispatchPendingInspect(web.url.orEmpty())
         }
