@@ -764,7 +764,8 @@ class AkkpsRunnerActivity : Activity() {
                 return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id);
               };
               const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
-                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())&&
+                (visible(e)||(String(e.type||'').toLowerCase()==='checkbox'&&visible(e.closest('label')||e.parentElement)))&&
+                !e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())&&
                 !sensitiveLabel.test(labelFor(e))
               ).map((e,i)=>({
                 index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
