@@ -35,6 +35,9 @@ object AkkpsRunnerRouteCatalog {
         "/runner/farmers/new" to AkkpsRunnerModule.FARMERS,
         "/runner/plots/new" to AkkpsRunnerModule.PLOTS,
         "/runner/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS,
+        // Plot boundary creation is a Runner-only sub-workflow observed in the supplied UI.
+        "/runner/plots/create-boundary" to AkkpsRunnerModule.PLOTS,
+        "/runner/plots/create-land-map" to AkkpsRunnerModule.PLOTS,
         // Shared route aliases observed in the APK; AKKPS still enforces Runner access.
         "/plots/new" to AkkpsRunnerModule.PLOTS,
         "/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS
@@ -74,6 +77,7 @@ object AkkpsRunnerRouteCatalog {
         val detailPatterns = listOf(
             Regex("^/runner/farmers/[^/]+$") to AkkpsRunnerModule.FARMERS,
             Regex("^/runner/plots/[^/]+$") to AkkpsRunnerModule.PLOTS,
+            Regex("^/runner/plots/[^/]+/(?:boundary|create-boundary|land-map|map|edit)$") to AkkpsRunnerModule.PLOTS,
             Regex("^/runner/awd-reports/[^/]+$") to AkkpsRunnerModule.AWD_REPORTS
         )
         detailPatterns.firstOrNull { (pattern, _) -> pattern.matches(path) }?.let { (_, module) ->
