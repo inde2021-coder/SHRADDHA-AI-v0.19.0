@@ -54,7 +54,7 @@ object AkkpsFieldAliasCatalog {
         "irrigations per season" to "irrigationsSeason", "प्रति मौसम सिंचाई" to "irrigationsSeason",
         "crop duration" to "cropDurationDays", "फसल अवधि" to "cropDurationDays",
         "year" to "year", "वर्ष" to "year", "season" to "season", "मौसम" to "season",
-        "yield" to "yieldQtlAcre", "yield kg acre" to "yieldQtlAcre", "उपज" to "yieldQtlAcre",
+        "yield" to "yieldQtlAcre", "उपज" to "yieldQtlAcre",
         "crop establishment method" to "cropEstablishmentMethod", "फसल स्थापना विधि" to "cropEstablishmentMethod",
         "planting date" to "plantingDate", "रोपाई की तारीख" to "plantingDate",
         "stratum water regime" to "stratumWaterRegime", "जल व्यवस्था" to "stratumWaterRegime",
