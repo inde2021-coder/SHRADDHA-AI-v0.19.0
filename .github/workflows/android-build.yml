@@ -9,11 +9,13 @@ on:
   push:
     branches:
       - main
+      - feature/shraddha-multilingual-voice-pawari
       - audit-fixes-v0.19.1
       - redesign-v0.19.2
       - 'optimization/**'
   pull_request:
     branches:
+      - main
       - redesign-v0.19.2
       - 'integration/**'
   workflow_dispatch:
@@ -91,6 +93,8 @@ jobs:
 
       - name: Validate custom voice engine Python syntax
         run: python -m py_compile voice-engine/app.py
+      - name: Test satellite model pack manifest and download safety
+        run: python -m unittest discover -s pc_companion/tests -p 'test_satellite_model_pack.py' -v
 
       - name: Check patch whitespace
         run: git diff --check
