@@ -77,7 +77,7 @@ class CommandExecutionJournal(context: Context) {
      * Returns false if any durable write fails, so startup recovery can remain blocked.
      */
     @Synchronized
-    fun recoverInterruptedSteps(): Boolean {
+    fun recoverInterruptedSteps(): Boolean = runCatching {
         val plans = loadAll()
         for (plan in plans) {
             val recovered = plan.steps.map { step ->
@@ -87,10 +87,10 @@ class CommandExecutionJournal(context: Context) {
                     updatedAt = System.currentTimeMillis()
                 ) else step
             }
-            if (recovered != plan.steps && !persist(plan.copy(steps = recovered))) return false
+            if (recovered != plan.steps && !persist(plan.copy(steps = recovered))) return@runCatching false
         }
-        return true
-    }
+        true
+    }.getOrDefault(false)
 
     @Synchronized
     fun markRunning(planId: String, stepId: String, maxAttempts: Int = 2): CommandTaskStep? =
@@ -150,9 +150,20 @@ class CommandExecutionJournal(context: Context) {
 
     private fun loadAll(): List<CommandTaskPlan> {
         val raw = prefs.getString(KEY_PLANS, null) ?: return emptyList()
-        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
-        return (0 until array.length()).mapNotNull { i ->
-            runCatching { decode(array.getJSONObject(i)) }.getOrNull()
+        val array = try {
+            JSONArray(raw)
+        } catch (error: Exception) {
+            throw IllegalStateException("Command execution journal is corrupted; refusing to resume actions.", error)
+        }
+        return (0 until array.length()).map { index ->
+            try {
+                decode(array.getJSONObject(index))
+            } catch (error: Exception) {
+                throw IllegalStateException(
+                    "Command execution journal entry $index is invalid; refusing to resume actions.",
+                    error
+                )
+            }
         }
     }
 
