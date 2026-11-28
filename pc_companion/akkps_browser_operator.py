@@ -894,6 +894,67 @@ class AkkpsBrowserOperator:
             "next_step": "Review the visible map and use the portal's own Upload/Save control with separate confirmation."
         }
 
+    def upload_boundary_kml_after_confirmation(self, upload_button_label: str):
+        """Use one explicit non-submit Plot boundary Upload button and require a server record ID."""
+        label = " ".join(str(upload_button_label or "").split())
+        if (not label or len(label) > 100 or SENSITIVE_LABEL.search(label) or
+                not re.search(r"(boundary|kml|upload|save|सीमा|अपलोड)", label, re.I) or
+                _is_explicit_submit_label(label)):
+            raise ValueError("Provide the exact visible boundary/KML Upload or Save button label, not the record Submit label.")
+        validate_runner_url(self.page.url)
+        route = urlparse(self.page.url).path.casefold().rstrip("/")
+        if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
+            raise RuntimeError("Boundary upload is available only in the AKKPS Runner Plots workflow.")
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible Plot boundary form.")
+        files = forms.first.locator('input[type="file"]')
+        selected_kml = []
+        for index in range(files.count()):
+            item = files.nth(index)
+            names = item.evaluate("(e) => e.files ? [...e.files].map(f => f.name) : []")
+            selected_kml.extend(name for name in names if str(name).casefold().endswith(".kml"))
+        if len(selected_kml) != 1:
+            raise RuntimeError("Select exactly one reviewed KML boundary file before portal upload.")
+        button = forms.first.get_by_role("button", name=label, exact=True)
+        if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
+            raise RuntimeError("Exact boundary Upload/Save control is missing, ambiguous or disabled.")
+        if (button.first.get_attribute("type") or "").casefold() != "button":
+            raise RuntimeError("Boundary control may submit the whole Plot record; refusing to click it.")
+        origin = urlparse(self.page.url).netloc.casefold()
+        clicked = False
+        try:
+            with self.page.expect_response(
+                lambda item: (
+                    item.request.method.upper() in {"POST", "PUT", "PATCH"} and
+                    urlparse(item.url).netloc.casefold() == origin and
+                    bool(re.search(r"(boundary|plot|map|kml)", urlparse(item.url).path, re.I))
+                ), timeout=25000
+            ) as response_info:
+                button.first.click()
+                clicked = True
+            response = response_info.value
+        except Exception:
+            return {
+                "clicked": clicked, "boundary_upload_verified": False,
+                "outcome": "uncertain", "automatic_retry": False,
+                "record_submitted": False, "selected_file": selected_kml[0]
+            }
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+        record_id = verified_record_response(
+            response.request.method, response.url, response.status, payload
+        )
+        return {
+            "clicked": True, "http_status": response.status,
+            "boundary_upload_verified": bool(record_id), "record_id": record_id,
+            "outcome": "verified" if record_id else "uncertain",
+            "automatic_retry": False, "record_submitted": False,
+            "selected_file": selected_kml[0]
+        }
+
     def inspect_map_boundary(self):
         """Inspect visible map/drawing controls without reading coordinates or changing geometry."""
         validate_runner_url(self.page.url)
