@@ -77,7 +77,7 @@ object AkkpsRunnerRouteCatalog {
         val detailPatterns = listOf(
             Regex("^/runner/farmers/[^/]+$") to AkkpsRunnerModule.FARMERS,
             Regex("^/runner/plots/[^/]+$") to AkkpsRunnerModule.PLOTS,
-            Regex("^/runner/plots/[^/]+/(?:boundary|create-boundary|land-map|map|edit)$") to AkkpsRunnerModule.PLOTS,
+            Regex("^/runner/plots/[^/]+/(?:boundary|create-boundary|create-land-map|land-map|map|edit)$") to AkkpsRunnerModule.PLOTS,
             Regex("^/runner/awd-reports/[^/]+$") to AkkpsRunnerModule.AWD_REPORTS
         )
         detailPatterns.firstOrNull { (pattern, _) -> pattern.matches(path) }?.let { (_, module) ->
