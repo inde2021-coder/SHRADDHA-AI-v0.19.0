@@ -289,7 +289,12 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 VoiceLatencyTracker.markUserTurnStart()
                 ConversationMemory.recordTurn(MemoryRole.USER, text)
-                scope.launch { PersistentChatMemory.record(currentContext, "User", text) }
+                scope.launch {
+                    val saved = PersistentChatMemory.record(currentContext, "User", text)
+                    if (saved.isFailure && PersistentChatMemory.isEnabled(currentContext)) {
+                        _statusText.value = "Encrypted conversation memory is unavailable; this turn was not saved."
+                    }
+                }
                 val detected = LanguageDetector.detect(text)
                 if (detected != "UNKNOWN") {
                     _detectedLanguage.value = detected
