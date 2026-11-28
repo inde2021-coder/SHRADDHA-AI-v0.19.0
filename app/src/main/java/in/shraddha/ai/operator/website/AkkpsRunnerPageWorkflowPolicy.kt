@@ -18,7 +18,7 @@ object AkkpsRunnerPageWorkflowPolicy {
     private val repeatedSections = listOf(
         Triple("drying event dates", Regex("(drying event|drying date|सूखने की तारीख|सूखने की घटना)"), "drying event"),
         Triple("re-flooding dates", Regex("(re[- ]?flooding|reflooding|पुनः बाढ़|दोबारा पानी भरने)"), "re-flooding"),
-        Triple("fertilizer application dates", Regex("(fertilizer|fertiliser|खाद|उर्वरक)"), "fertilizer"),
+        Triple("fertilizer application dates", Regex("(?<!other )(?:fertilizer|fertiliser)|(?<!अन्य )(?:खाद|उर्वरक)"), "fertilizer"),
         Triple("other fertilizer rows", Regex("(other fertilizer|other fertiliser|अन्य खाद|अन्य उर्वरक)"), "other fertilizer"),
         Triple("field visits", Regex("(field visit|audit visit|खेत का दौरा|खेत के दौरे)"), "field visit"),
         Triple("historical yield rows", Regex("(historical yield|past yield|पुरानी उपज|ऐतिहासिक उपज)"), "historical yield"),
@@ -27,7 +27,7 @@ object AkkpsRunnerPageWorkflowPolicy {
 
     fun repeatedEntrySection(command: String): String? {
         val value = normalize(command)
-        if (!Regex("^(add|add another|new|जोड़ें|जोड़ें|जोड़ो|नई प्रविष्टि|एक और)\\b").containsMatchIn(value)) return null
+        if (!(value.startsWith("add ") || value.startsWith("add another ") || value.startsWith("new ") || value.startsWith("जोड़ें") || value.startsWith("जोड़ें") || value.startsWith("जोड़ो") || value.startsWith("नई प्रविष्टि") || value.startsWith("एक और"))) return null
         val matches = repeatedSections.filter { it.second.containsMatchIn(value) }
         if (matches.size != 1) return null
         return matches.single().first
