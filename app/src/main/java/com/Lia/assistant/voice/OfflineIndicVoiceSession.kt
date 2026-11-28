@@ -38,6 +38,7 @@ class OfflineIndicVoiceSession(
     private var appContext: Context? = null
     private var audio: LiveAudioIO? = null
 
+    @Synchronized
     fun start(context: Context, language: IndicConformerRuntime.Language) {
         check(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "Microphone permission is required for offline voice."
@@ -137,6 +138,7 @@ class OfflineIndicVoiceSession(
         }
     }
 
+    @Synchronized
     fun stop() {
         if (!running.getAndSet(false)) return
         sessionEpoch.incrementAndGet()
@@ -151,6 +153,7 @@ class OfflineIndicVoiceSession(
         onStatus("Offline microphone stopped")
     }
 
+    @Synchronized
     fun release() {
         stop()
         scope.cancel()
