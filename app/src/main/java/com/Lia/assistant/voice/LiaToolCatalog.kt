@@ -44,6 +44,15 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "open_akkps_runner",
+                description = "Opens Shraddha AI's dedicated, allow-listed AKKPS Runner workspace. The user signs in directly inside the official HTTPS website; passwords and OTPs stay in the website and are never sent to the AI. After login, use Inspect to discover visible Runner modules and use the reviewed Farmer, Plot and AWD data-entry workflows. Submit always requires explicit user intent and server-side record verification.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "build_website",
                 description = "Launches the Website Forge to design, code, and animate a complete website based on a description.",
                 params = mapOf("prompt" to "Detailed description of the website to build"),
