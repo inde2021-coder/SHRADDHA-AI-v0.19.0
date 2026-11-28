@@ -1,6 +1,6 @@
 """User-authorized AKKPS browser operator for the Shraddha AI Windows companion.
 
-The operator uses a visible Chromium window and a persistent local browser profile.
+The operator uses a visible Microsoft Edge window and a persistent local browser profile.
 Credentials and OTPs are entered by the human in the website itself; this module
 never accepts, stores, logs, or transmits them. Form submission is a separate,
 explicitly confirmed operation.
