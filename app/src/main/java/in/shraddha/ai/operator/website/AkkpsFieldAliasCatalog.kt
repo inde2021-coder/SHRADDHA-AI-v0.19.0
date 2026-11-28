@@ -109,8 +109,8 @@ object AkkpsFieldAliasCatalog {
     fun normalizeLabel(raw: String): String =
         Normalizer.normalize(raw, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT)
-            .replace(Regex("[^\\\\p{L}\\\\p{N}]+"), " ")
-            .replace(Regex("\\\\s+"), " ")
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
     fun canonicalKey(raw: String): String {
