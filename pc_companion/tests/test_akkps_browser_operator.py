@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, validate_akkps_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, SENSITIVE_LABEL, validate_akkps_url
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -16,6 +16,21 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_rejects_credentials_in_url(self):
         with self.assertRaises(ValueError):
             validate_akkps_url("https://user:pass@www.akkps.ngo")
+
+    def test_rejects_unverified_lookalike_host(self):
+        with self.assertRaises(ValueError):
+            validate_akkps_url("https://www.akps.ngo/runner")
+
+    def test_sensitive_labels_are_detected(self):
+        for label in ("Password", "OTP", "PIN", "CAPTCHA", "पासवर्ड", "ओटीपी"):
+            with self.subTest(label=label):
+                self.assertRegex(label, SENSITIVE_LABEL)
+
+    def test_submit_requires_exact_confirmation_before_browser_access(self):
+        with tempfile.TemporaryDirectory() as folder:
+            operator = AkkpsBrowserOperator(folder)
+            with self.assertRaises(PermissionError):
+                operator.submit_after_confirmation("yes")
 
     def test_requires_browser_before_page_access(self):
         with tempfile.TemporaryDirectory() as folder:
