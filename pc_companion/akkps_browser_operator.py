@@ -614,9 +614,9 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Repeated AWD entries are available only on AWD Reports pages.")
         if not isinstance(values, dict) or not values or len(values) > 30:
             raise ValueError("Provide 1–30 exact field-label/value pairs for the newest row.")
-        if forms := self.page.locator("form:visible"):
-            if forms.count() != 1:
-                raise RuntimeError("Expected exactly one visible AWD form.")
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible AWD form.")
         section = self._awd_section(snapshot["section"])
         fields = section.locator("input,select,textarea")
         baseline = int(snapshot["baseline_field_count"])
@@ -638,9 +638,9 @@ class AkkpsBrowserOperator:
             candidates = []
             for index in range(matches.count()):
                 candidate = matches.nth(index)
-                position = candidate.evaluate(
-                    "(e) => [...e.closest('fieldset,section,[data-section],[role=group]')"
-                    "?.querySelectorAll('input,select,textarea') || []].indexOf(e)"
+                position = fields.evaluate_all(
+                    "(els, target) => els.indexOf(target)",
+                    candidate.element_handle()
                 )
                 if position >= baseline:
                     candidates.append(candidate)
@@ -727,7 +727,8 @@ class AkkpsBrowserOperator:
             raise ValueError("Choose an existing PDF, JPG or PNG document.")
         if path.stat().st_size <= 0 or path.stat().st_size > 10 * 1024 * 1024:
             raise ValueError("Document must be non-empty and no larger than 10 MB.")
-        signature = path.read_bytes()[:16]
+        with path.open("rb") as source:
+            signature = source.read(16)
         valid_signature = (
             (path.suffix.casefold() == ".pdf" and signature.startswith(b"%PDF-")) or
             (path.suffix.casefold() in {".jpg", ".jpeg"} and signature.startswith(b"\xff\xd8\xff")) or
@@ -836,6 +837,32 @@ class AkkpsBrowserOperator:
             raise ValueError("Choose an existing .kml boundary file.")
         if path.stat().st_size <= 0 or path.stat().st_size > 10 * 1024 * 1024:
             raise ValueError("KML must be non-empty and no larger than 10 MB.")
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.fromstring(path.read_bytes())
+        except (ET.ParseError, OSError) as exc:
+            raise ValueError("Boundary file is not valid KML/XML.") from exc
+        local = lambda node: node.tag.rsplit("}", 1)[-1].casefold()
+        polygons = [node for node in root.iter() if local(node) == "polygon"]
+        if len(polygons) != 1 or any(local(node) == "innerboundaryis" for node in root.iter()):
+            raise ValueError("KML must contain exactly one Polygon outer ring and no interior holes.")
+        coordinate_nodes = [node for node in polygons[0].iter() if local(node) == "coordinates"]
+        if len(coordinate_nodes) != 1 or not (coordinate_nodes[0].text or "").strip():
+            raise ValueError("KML Polygon has no unique coordinate ring.")
+        ring = []
+        for token in (coordinate_nodes[0].text or "").split():
+            parts = token.split(",")
+            if len(parts) < 2:
+                raise ValueError("KML coordinate tuple is invalid.")
+            try:
+                lon, lat = float(parts[0]), float(parts[1])
+            except ValueError as exc:
+                raise ValueError("KML coordinates must be numeric.") from exc
+            if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+                raise ValueError("KML coordinates are outside valid longitude/latitude ranges.")
+            ring.append((lon, lat))
+        if len(ring) < 4 or len(ring) > 501 or ring[0] != ring[-1] or len(set(ring[:-1])) < 3:
+            raise ValueError("KML outer ring must be closed and contain 3–500 distinct points.")
         validate_runner_url(self.page.url)
         route = urlparse(self.page.url).path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
