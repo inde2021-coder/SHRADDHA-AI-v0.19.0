@@ -51,6 +51,7 @@ class AkkpsRunnerActivity : Activity() {
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
+    private var pendingAiCommand: String? = null
     private var submitVerificationPending = false
     private var submitNeedsManualReview = false
     private val gpsListener = object : LocationListener {
@@ -133,6 +134,7 @@ class AkkpsRunnerActivity : Activity() {
             text = "अपने Runner खाते से सीधे Login करें। Password/OTP Shraddha को नहीं भेजे जाते। केवल Farmer, Plot और AWD डेटा एंट्री/Submit।"
             textSize = 12f; setTextColor(0xFF9CC6D6.toInt()); setPadding(dp(4), 0, dp(4), dp(8))
         })
+        pendingAiCommand = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()?.takeIf { it.isNotBlank() && it.length <= 3000 }
         command = EditText(this).apply {
             hint = "एक कमांड: name=Ram; village=Rampur; phone=...; submit"
             setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
@@ -140,6 +142,7 @@ class AkkpsRunnerActivity : Activity() {
             setBackgroundColor(0xFF142536.toInt())
         }
         root.addView(command, LinearLayout.LayoutParams(-1, dp(82)))
+        pendingAiCommand?.let { command.setText(it) }
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Farmer Card OCR") { chooseFarmerCardImage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
@@ -206,6 +209,7 @@ class AkkpsRunnerActivity : Activity() {
                     if (AkkpsWebsiteProfile.acceptsUrl(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
                         installSubmitObserver()
+                        dispatchPendingAiCommand(url)
                     }
                 }
             }
@@ -257,6 +261,29 @@ class AkkpsRunnerActivity : Activity() {
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
+    }
+
+    /**
+     * Runs only a user-requested bounded command after the authenticated Runner route loads.
+     * Create-form commands are first routed to the observed Runner create path; submit still
+     * stops at the existing explicit confirmation dialog and server-ID verification.
+     */
+    private fun dispatchPendingAiCommand(url: String) {
+        val raw = pendingAiCommand ?: return
+        val route = AkkpsRunnerRouteCatalog.match(url) ?: return // wait until login reaches Runner
+        val targetModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+        if (targetModule != null && raw.contains('=') && !route.isCreateRoute) {
+            val targetRoute = AkkpsRunnerCreateCommandPolicy.route(targetModule) ?: return
+            if (route.module != targetModule || route.path != targetRoute) {
+                status.text = "${targetModule.label} form खोला जा रहा है; उसके बाद command execute होगी।"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + targetRoute)
+                return
+            }
+        }
+        pendingAiCommand = null
+        command.setText(raw)
+        status.text = "Shraddha AI command loaded. Fields review होंगे; Submit अलग पुष्टि माँगेगा।"
+        web.postDelayed({ if (!isFinishing && !isDestroyed) executeCommand() }, 350)
     }
 
     private fun startGpsWalk() {
@@ -1506,6 +1533,7 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     companion object {
+        const val EXTRA_RUNNER_COMMAND = "akkps_runner_command"
         private const val REQUEST_FILE = 7314
         private const val REQUEST_FARMER_CARD_OCR = 7320
         private const val REQUEST_LOCATION = 7315
