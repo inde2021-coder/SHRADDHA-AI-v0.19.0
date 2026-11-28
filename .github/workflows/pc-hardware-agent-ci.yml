@@ -63,7 +63,7 @@ jobs:
         run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py pc_companion/akkps_browser_operator.py pc_companion/akkps_browser_ui.py
 
       - name: Build Windows PC companion executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --collect-all playwright --collect-all greenlet --collect-all pyee --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --collect-all playwright --collect-all greenlet --collect-all pyee --hidden-import akkps_browser_operator --hidden-import akkps_browser_ui --hidden-import playwright.sync_api --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
 
       - name: Upload Windows PC companion executable
         uses: actions/upload-artifact@v6
