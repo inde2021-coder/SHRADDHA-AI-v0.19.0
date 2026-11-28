@@ -46,6 +46,14 @@ def validate_akkps_url(url: str) -> str:
     return raw
 
 
+def _is_explicit_submit_label(label: str) -> bool:
+    normalized = " ".join(re.sub(r"[^\\w\\u0900-\\u097f]+", " ", str(label or "").casefold()).split())
+    return normalized in {
+        "submit", "submit report", "submit plot", "submit registration",
+        "submit farmer", "submit awd report", "जमा करें", "सबमिट", "सबमिट करें", "भेजें"
+    }
+
+
 def verified_record_response(method: str, url: str, status: int, payload):
     """Return a record ID only for a successful, approved-origin Runner write response."""
     try:
@@ -403,14 +411,22 @@ class AkkpsBrowserOperator:
         action_path = urlparse(action_url).path.casefold()
         if re.search(r"/(admin|coordinator)(/|$)", action_path):
             raise RuntimeError("Admin/Coordinator submissions are outside the Runner scope.")
-        candidates = form.locator('button[type="submit"], input[type="submit"]')
-        count = candidates.count()
-        if count != 1:
-            raise RuntimeError(f"Expected one submit control in the reviewed form; found {count}. Refusing submission.")
-        button = candidates.first
-        if not button.is_visible() or not button.is_enabled():
-            raise RuntimeError("Submit control is not available.")
+        candidates = form.locator('button, input[type="submit"], [role="button"]')
+        matched = []
+        for index in range(candidates.count()):
+            candidate = candidates.nth(index)
+            if not candidate.is_visible() or not candidate.is_enabled():
+                continue
+            is_input = candidate.evaluate("(e) => e.tagName === 'INPUT'")
+            label = (candidate.get_attribute("aria-label") or candidate.get_attribute("title") or
+                     (candidate.input_value() if is_input else candidate.inner_text()))
+            if _is_explicit_submit_label(label):
+                matched.append(candidate)
+        if len(matched) != 1:
+            raise RuntimeError(f"Expected one explicit final Submit control; found {len(matched)}. Refusing submission.")
+        button = matched[0]
         response = None
+        clicked = False
         try:
             with page.expect_response(
                 lambda item: (
@@ -422,11 +438,12 @@ class AkkpsBrowserOperator:
                 timeout=15000
             ) as response_info:
                 button.click()
+                clicked = True
             response = response_info.value
         except Exception:
             # The click may have reached the server even if the browser did not
             # expose a matching response. Never retry a potentially accepted write.
-            return {"clicked": True, "before_url": before_url,
+            return {"clicked": clicked, "click_attempted": True, "before_url": before_url,
                     "after_url": page.url if not page.is_closed() else before_url,
                     "server_record_verified": False, "record_id": None,
                     "outcome": "uncertain", "automatic_retry": False}
