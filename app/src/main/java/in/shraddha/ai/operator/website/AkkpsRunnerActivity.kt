@@ -1270,6 +1270,7 @@ class AkkpsRunnerActivity : Activity() {
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
             .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
+            .replace("__SUBMIT_LABELS__", JSONArray(AkkpsSubmitTargetPolicy.explicitSubmitLabels.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
             fieldFillInProgress = false
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
@@ -1516,8 +1517,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 if(actual!==String(item.value)&&optionText!==wanted)
                   return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const finalSubmitLabels=new Set(['submit','submit report','submit plot','submit registration',
-                'submit farmer','submit awd report','जमा करें','सबमिट','सबमिट करें','भेजें']);
+              const finalSubmitLabels=new Set(__SUBMIT_LABELS__);
               const submitControls=[...f.querySelectorAll('button,input[type=submit],[role=button]')]
                 .filter(x=>!x.disabled&&x.getAttribute('aria-disabled')!=='true'&&x.getClientRects().length&&
                   getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none')
