@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import `in`.shraddha.ai.future.CouncilCostBudget
 import `in`.shraddha.ai.brain.PersistentChatMemory
+import com.Lia.assistant.voice.ConversationMemory
 import `in`.shraddha.ai.operator.VoiceToolActionJournal
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
@@ -293,7 +294,12 @@ private fun SettingsScreenContent(
                     icon = Icons.Default.Speed,
                     switch = voiceMemoryEnabled,
                     onCheckedChange = { enabled ->
-                        runCatching { PersistentChatMemory.setEnabled(context, enabled) }
+                        runCatching {
+                            // Retire the previous voice-history store so a stale legacy opt-in
+                            // cannot keep writing after the new consent toggle is turned off.
+                            ConversationMemory.setPersistenceEnabled(context, false).getOrThrow()
+                            PersistentChatMemory.setEnabled(context, enabled)
+                        }
                             .onSuccess {
                                 voiceMemoryEnabled = PersistentChatMemory.isEnabled(context)
                                 voiceMemoryError = null
