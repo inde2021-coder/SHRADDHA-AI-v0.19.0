@@ -7,7 +7,7 @@ class AkkpsObservedModuleInventoryCodecTest {
     @Test fun roundTripsOnlyObservedRunnerModuleRoutesAndCapabilities() {
         val route = AkkpsObservedRunnerRoute("AWD Reports", "/runner/awd-reports")
         val entry = AkkpsObservedModuleInventoryEntry(
-            route, 1_800_000_000_000L,
+            route, 1_795_824_000_000L,
             mapOf("OBSERVE_PAGE" to CapabilityState.AVAILABLE, "SUBMIT_FORM" to CapabilityState.UNKNOWN)
         )
         val decoded = AkkpsObservedModuleInventoryCodec.decode(
@@ -19,7 +19,7 @@ class AkkpsObservedModuleInventoryCodecTest {
 
     @Test fun rejectsUnobservedOrRestrictedPaths() {
         val bad = AkkpsObservedModuleInventoryEntry(
-            AkkpsObservedRunnerRoute("Admin", "/runner/admin"), 1_800_000_000_000L,
+            AkkpsObservedRunnerRoute("Admin", "/runner/admin"), 1_795_824_000_000L,
             mapOf("OBSERVE_PAGE" to CapabilityState.AVAILABLE)
         )
         assertThrows(IllegalArgumentException::class.java) {
