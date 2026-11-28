@@ -45,4 +45,29 @@ class AkkpsObservedModuleInventoryCodecTest {
         assertNotNull(AkkpsObservedModuleInventoryCodec.decode(AkkpsObservedModuleInventoryCodec.encode(merged)))
     }
 
+    @Test fun refusesToPersistCapabilitiesOutsideRunnerDataEntryScope() {
+        val route = AkkpsObservedRunnerRoute("AWD Reports", "/runner/awd-reports")
+        val unsafe = AkkpsObservedModuleInventoryEntry(
+            route, 1_795_824_000_000L,
+            mapOf("DELETE_RECORD" to CapabilityState.AVAILABLE)
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            AkkpsObservedModuleInventoryCodec.encode(mapOf(route.path to unsafe))
+        }
+        val safe = unsafe.copy(capabilities = mapOf("DELETE_RECORD" to CapabilityState.UNAVAILABLE))
+        assertEquals(
+            CapabilityState.UNAVAILABLE,
+            AkkpsObservedModuleInventoryCodec.decode(
+                AkkpsObservedModuleInventoryCodec.encode(mapOf(route.path to safe))
+            )[route.path]?.capabilities?.get("DELETE_RECORD")
+        )
+    }
+
+    @Test fun rejectsDecodedInventoryThatGrantsBlockedOperations() {
+        val unsafe = """{"version":1,"modules":[{"label":"AWD Reports","path":"/runner/awd-reports","active":false,"observedAt":1795824000000,"capabilities":{"DELETE_RECORD":"AVAILABLE"}}]}"""
+        assertThrows(IllegalArgumentException::class.java) {
+            AkkpsObservedModuleInventoryCodec.decode(unsafe)
+        }
+    }
+
 }
