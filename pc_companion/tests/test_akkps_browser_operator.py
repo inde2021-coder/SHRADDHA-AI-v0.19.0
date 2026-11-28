@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, SENSITIVE_LABEL, validate_akkps_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, SENSITIVE_LABEL, validate_akkps_url, validate_runner_url
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -16,6 +16,20 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_rejects_credentials_in_url(self):
         with self.assertRaises(ValueError):
             validate_akkps_url("https://user:pass@www.akkps.ngo")
+
+    def test_runner_navigation_allows_login_and_runner_only(self):
+        for url in ("https://www.akkps.ngo/", "https://www.akkps.ngo/login",
+                    "https://www.akkps.ngo/runner", "https://www.akkps.ngo/runner/farmers"):
+            with self.subTest(url=url):
+                self.assertEqual(validate_runner_url(url), url)
+
+    def test_runner_navigation_rejects_admin_and_traversal(self):
+        for url in ("https://www.akkps.ngo/admin", "https://www.akkps.ngo/coordinator/plots",
+                    "https://www.akkps.ngo/runner/../admin",
+                    "https://www.akkps.ngo/runner/%2e%2e/admin",
+                    "https://www.akkps.ngo/runner%2f..%2fadmin"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                validate_runner_url(url)
 
     def test_rejects_unverified_lookalike_host(self):
         with self.assertRaises(ValueError):
