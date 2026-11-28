@@ -668,9 +668,9 @@ class AkkpsBrowserOperator:
         suggestions.first.click()
         self.page.wait_for_timeout(150)
         still_visible = self.page.get_by_role("option", name=exact_option, exact=True).count()
-        non_empty = field.first.evaluate("(e) => Boolean(e.value && e.value.trim())")
-        if still_visible or not non_empty:
-            raise RuntimeError("Autocomplete selection could not be verified; review the field manually.")
+        selected_value = field.first.evaluate("(e) => String(e.value || '').trim()")
+        if still_visible or selected_value.casefold() != exact_option.casefold():
+            raise RuntimeError("Autocomplete selection could not be verified from the selected field value; review it manually.")
         return {"field": field_label, "selected_option": exact_option,
                 "selection_verified": True, "submitted": False}
 
