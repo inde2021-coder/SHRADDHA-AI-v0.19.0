@@ -82,8 +82,9 @@ class TaskPlannerOperatorBridge(
             OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT ->
                 require(step.target.isNotBlank()) { "Action requires an explicit target" }
             OperatorActionType.SELECT_FILE -> {
-                require(step.target.isNotBlank() && step.value.isBlank()) {
-                    "SELECT_FILE requires an exact file name and no extra value"
+                require(step.target.isNotBlank() && step.value.isBlank() &&
+                    step.expectedVisibleText.equals(step.target, ignoreCase = true)) {
+                    "SELECT_FILE requires an exact file name, no extra value and a matching postcondition"
                 }
             }
             OperatorActionType.TYPE_TEXT -> {
