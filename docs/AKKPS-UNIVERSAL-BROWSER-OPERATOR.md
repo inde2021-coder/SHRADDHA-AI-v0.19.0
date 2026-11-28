@@ -1,41 +1,38 @@
-# AKKPS Universal Browser Operator (Windows)
+# AKKPS website access for Shraddha AI
 
-This module adds a visible Playwright Chromium session to the Windows companion so
-Shraddha AI can operate the user's authorized AKKPS/TerraMark account through the
-same web UI a person uses. It supports the two confirmed hosts:
+Shraddha AI has two entry points for the user's authorized AKKPS account.
 
-- https://www.akkps.ngo
+## Android — primary Runner workspace
 
-The main portal is opened first. After the user signs in manually, **Open Runner**
-navigates to the same host's `/runner` route. Whether both hosts share authentication
-is not assumed; the user must sign in on whichever host requires it.
+The Main Brain tool `open_akkps_runner` opens the existing native `AkkpsRunnerActivity` WebView. The user signs in directly on the website; credentials and OTPs are never sent to the model.
 
-## Install and run
+The Runner workspace already includes these observed routes:
 
-The Windows companion dependency set includes Playwright. The Windows package workflow bundles its Python runtime and uses the Microsoft Edge installation already present on Windows. For source development, install `pc_companion/requirements.txt`.
+- Dashboard: `/runner`
+- Farmers: `/runner/farmers`
+- Plots: `/runner/plots`
+- AWD Reports: `/runner/awd-reports`
+- Profile: `/runner/profile`
+- Data Sync: `/runner/sync`
 
-The persistent browser profile is local to the current Windows user. Do not copy,
-commit, upload, or share that profile. It may contain authenticated cookies and
-site storage. Credentials, passwords, OTPs and CAPTCHA answers are entered by the
-user directly in the visible browser; Shraddha AI must not request or retain them.
+It includes page inspection, Farmer Card OCR, Farmer/Plot/AWD field mapping, missing-field checks, explicit submit intent, and server-response verification. A submit is considered server-confirmed only when the observed same-origin write response is successful and contains a record ID. A toast or button click alone is not enough. Uncertain writes are not automatically retried.
 
-## Shraddha AI commands\n\nFrom the paired Android PC command surface, the user can say or type:\n\n- `Open AKKPS` — opens the main portal in visible Edge; the user signs in manually.\n- `Open AKKPS Runner` — opens `/runner` on the currently authenticated AKKPS host.\n- `Inspect AKKPS` — returns the visible page title, same-origin navigation, safe field labels, button labels and table headers.\n\nThese commands still require the Windows PC's local approval for each remote action. The Windows companion also exposes the AKKPS Website Operator window for manual inspection and reviewed field entry.\n\n## Safety contract
+## Windows — visible browser companion
 
-- Only HTTPS on the four exact AKKPS hostnames above is allowed.
-- Browser is headed/visible; no stealth, CAPTCHA bypass, MFA bypass, or access-control bypass.
-- Inventory reads visible navigation, field labels, button labels and table headers;
-  it does not read form values, farmer row contents, cookies or browser storage.
-- Credential/OTP/hidden/file/CAPTCHA fields are excluded from inventory and filling.
-- Field fill requires one exact accessible label; fuzzy matches and ambiguous controls fail closed.
-- Preview is separate from filling. Submit is a separate call requiring the exact
-  human confirmation phrase `SUBMIT AKKPS RECORD`.
-- A submit click is **not** proof that the server saved a record. The operator never
-  retries a potentially successful submit automatically. Existing Android Runner
-  server-response verification and record re-open verification must be used.
-- Delete, bulk update, payment, approval and irreversible actions are not automated
-  by this first adapter.
+The Windows companion adds an AKKPS Website Operator window. It opens visible Microsoft Edge with a persistent local profile. The user signs in manually, then can open `/runner`, inspect visible headings/navigation/form labels, preview a field change, and fill one exact unambiguous field after local confirmation.
 
-This is a first Windows browser adapter, not a declaration that every private AKKPS
-module is already mapped. After the user-authorized login, inventory each actual
-Runner page and add exact module workflows with tests. Real account end-to-end checks
-must be performed by the account owner.
+From the paired Android PC command surface, these commands are supported:
+
+- `Open AKKPS` — open the verified AKKPS portal in Edge.
+- `Open AKKPS Runner` — open the Runner route in the same authenticated Edge session.
+- `Inspect AKKPS` — return a bounded inventory of visible page structure.
+
+Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. A submit click is reported as unverified until the record is independently checked.
+
+## Approved origin and privacy
+
+Only HTTPS on `akkps.ngo` and `www.akkps.ngo` is accepted. The similarly spelled `akps.ngo` host is not enabled because it has not been verified as the same service; use the `akkps.ngo` domain shown by the official login page.
+
+The Windows browser profile may contain authenticated cookies and site storage. It stays on the local Windows user profile and must never be committed, uploaded, copied, or shared. Passwords, OTPs and CAPTCHA answers are entered by the user directly into the visible site. Shraddha AI does not read or store them.
+
+No stealth, CAPTCHA bypass, MFA bypass, or access-control bypass is implemented. Delete, bulk update, payment, approval and other irreversible actions are not enabled by this adapter. The private account's real module flows and server-side outcomes still require authorized end-to-end verification by the account owner.
