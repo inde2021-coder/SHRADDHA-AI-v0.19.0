@@ -772,7 +772,10 @@ class AkkpsRunnerActivity : Activity() {
                 actionLabels = actionLabels,
                 navigationLabels = navigationLabels,
                 isCreateRoute = route?.isCreateRoute == true,
-                isDetailRoute = route?.isDetailRoute == true
+                isDetailRoute = route?.isDetailRoute == true,
+                supportedDataEntryModule = route?.module in setOf(
+                    AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS
+                )
             )
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
