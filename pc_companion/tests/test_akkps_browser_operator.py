@@ -164,6 +164,23 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 operator.submit_after_confirmation("yes")
 
+    def test_map_draw_edit_tool_names_are_allowlisted(self):
+        with tempfile.TemporaryDirectory() as folder:
+            operator = AkkpsBrowserOperator(folder)
+            for tool in ("delete", "clear", "save", "submit", ""):
+                with self.subTest(tool=tool), self.assertRaises(ValueError):
+                    operator.activate_map_tool(tool, "Draw Polygon")
+            with self.assertRaises(ValueError):
+                operator.activate_map_tool("draw", "Password")
+
+    def test_map_tool_requires_live_authenticated_page(self):
+        with tempfile.TemporaryDirectory() as folder:
+            operator = AkkpsBrowserOperator(folder)
+            with self.assertRaises(RuntimeError):
+                operator.activate_map_tool("draw", "Draw Polygon")
+            with self.assertRaises(RuntimeError):
+                operator.verify_map_boundary_layers()
+
     def test_requires_browser_before_page_access(self):
         with tempfile.TemporaryDirectory() as folder:
             operator = AkkpsBrowserOperator(folder)
