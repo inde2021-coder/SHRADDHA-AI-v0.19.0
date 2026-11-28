@@ -74,6 +74,7 @@ class SkillPackLifecycleManager(context: Context) {
     )
     data class StagedPack(val packId: String, val version: String, val file: File, val signedPublisher: Boolean)
 
+    @Synchronized
     fun downloadAndQuarantine(
         manifest: Manifest,
         trustedPublishers: Map<String, TrustedPublisher>
@@ -136,6 +137,7 @@ class SkillPackLifecycleManager(context: Context) {
     }
 
     /** Explicit local import: never auto-activates and is marked unsigned for human review. */
+    @Synchronized
     fun importForReview(
         packId: String,
         version: String,
