@@ -757,16 +757,21 @@ class AkkpsRunnerActivity : Activity() {
               const n=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,120);
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
-              const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
-                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())
-              ).map((e,i)=>{
+              const sensitiveLabel=/password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड/i;
+              const labelFor=e=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
-                return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
-                  name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
-                  aria:n(e.getAttribute('aria-label')),label:[...new Set(labels)].join(' / '),
-                  required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly};
-              });
+                return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id);
+              };
+              const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
+                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())&&
+                !sensitiveLabel.test(labelFor(e))
+              ).map((e,i)=>({
+                index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
+                name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
+                aria:n(e.getAttribute('aria-label')),label:labelFor(e),
+                required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly
+              }));
               const forms=[...document.forms].filter(visible).map((f,i)=>({
                 index:i,name:n(f.getAttribute('name')),id:n(f.id),method:(f.method||'get').toUpperCase(),
                 fieldCount:[...f.querySelectorAll('input,textarea,select')].filter(visible).length,
