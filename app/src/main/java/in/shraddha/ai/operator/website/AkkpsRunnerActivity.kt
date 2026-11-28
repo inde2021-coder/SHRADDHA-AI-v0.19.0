@@ -990,7 +990,7 @@ class AkkpsRunnerActivity : Activity() {
                 window.google?.maps?'google-maps':window.ol?'openlayers':
                 window.maplibregl?'maplibre':'unknown';
               const polygonCount=document.querySelectorAll(
-                '.leaflet-interactive.leaflet-polygon, .mapboxgl-canvas, .ol-layer canvas'
+                '.leaflet-interactive.leaflet-polygon, .ol-overlaycontainer svg path, [data-geometry-type="polygon" i]'
               ).length;
               return {engine,surfaces,controls,uploads,polygonVisualCount:polygonCount,
                 route:location.pathname};
