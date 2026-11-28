@@ -293,7 +293,7 @@ class AkkpsRunnerActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
+        web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + "/runner")
     }
 
     /**
