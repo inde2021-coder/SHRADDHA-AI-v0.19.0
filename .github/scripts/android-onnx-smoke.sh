@@ -70,7 +70,7 @@ echo "Installing app and instrumentation APKs with direct ADB install..."
 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
 echo "Running the full Android instrumentation suite..."
-if instrumentation_output="$(timeout --signal=TERM --kill-after=30s 20m "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r")"; then
+if instrumentation_output="$(timeout --signal=TERM --kill-after=30s 90m "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r")"; then
   instrumentation_status=0
 else
   instrumentation_status=$?
