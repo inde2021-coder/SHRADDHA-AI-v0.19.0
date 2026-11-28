@@ -18,6 +18,10 @@ class LanguageRuntimeTests(unittest.TestCase):
         with self.assertRaises(LanguageRuntimeError):
             IndicConformerRuntime("xx")
 
+    def test_unverified_sanskrit_asr_is_disabled(self):
+        with self.assertRaises(LanguageRuntimeError):
+            IndicConformerRuntime("sa")
+
     def test_unverified_sanskrit_translation_is_not_advertised(self):
         self.assertIn("hi", SUPPORTED_TRANSLATION)
         self.assertIn("mr", SUPPORTED_TRANSLATION)
