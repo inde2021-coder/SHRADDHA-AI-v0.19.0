@@ -8,7 +8,7 @@ data class AkkpsAutocompleteRequest(
 )
 
 enum class AkkpsBoundaryVoiceAction {
-    INSPECT_MAP, VERIFY_UPLOAD, PREPARE_UPLOAD, IMPORT_SATELLITE,
+    INSPECT_MAP, START_MAP_DRAW, START_MAP_EDIT, VERIFY_UPLOAD, PREPARE_UPLOAD, IMPORT_SATELLITE,
     START_GPS_WALK, STOP_GPS_WALK, SAVE_LOCAL, REOPEN_LOCAL,
     IMPORT_KML, EXPORT_KML
 }
@@ -41,6 +41,8 @@ object AkkpsRunnerPageWorkflowPolicy {
         return when (value) {
             "inspect map", "inspect live map", "inspect map boundary", "inspect akkps live map", "check map", "check live map", "नक्शा जांचो", "नक्शा जाँचो",
             "मानचित्र जांचो", "सीमा जांचो" -> AkkpsBoundaryVoiceAction.INSPECT_MAP
+            "start map draw", "draw plot boundary", "draw polygon", "नक्शे पर सीमा बनाओ", "प्लॉट की सीमा बनाओ" -> AkkpsBoundaryVoiceAction.START_MAP_DRAW
+            "start map edit", "edit map boundary", "edit polygon", "सीमा संपादित करो", "नक्शे की सीमा सुधारो" -> AkkpsBoundaryVoiceAction.START_MAP_EDIT
             "verify boundary upload", "check boundary upload", "confirm boundary upload",
             "boundary upload verify", "सीमा अपलोड जांचो", "सीमा अपलोड की पुष्टि करो" -> AkkpsBoundaryVoiceAction.VERIFY_UPLOAD
             "prepare boundary for upload", "prepare boundary for akkps upload", "prepare boundary for portal upload", "prepare kml for upload", "prepare kml for akkps upload", "prepare boundary kml",
