@@ -53,6 +53,7 @@ class AkkpsRunnerActivity : Activity() {
     private var lastGpsElapsedRealtimeNanos = 0L
     private var pendingAiCommand: String? = null
     private var aiCommandDispatchScheduled = false
+    private var fieldFillInProgress = false
     private var pendingInspectOnLoad = false
     private var submitVerificationPending = false
     private var submitNeedsManualReview = false
@@ -121,7 +122,7 @@ class AkkpsRunnerActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (submitVerificationPending || submitNeedsManualReview || pendingAiCommand != null || aiCommandDispatchScheduled) {
+        if (submitVerificationPending || submitNeedsManualReview || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress) {
             status.text = "पिछला AKKPS command/Submit अभी पूरा नहीं हुआ। नया command नहीं चलाया गया।"
             return
         }
@@ -1089,6 +1090,8 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
+        if (fieldFillInProgress) { status.text = "पिछला field-fill अभी चल रहा है।"; return }
+        fieldFillInProgress = true
         // Reuse only previously server-verified administrative defaults; never store farmer identity.
         val commonDefaults = AkkpsLocalCommonFieldMemory.snapshot(this)
         val aliases = listOf(
@@ -1186,6 +1189,7 @@ class AkkpsRunnerActivity : Activity() {
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
             .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
+            fieldFillInProgress = false
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
             if (result.optString("formError").isNotBlank()) {
