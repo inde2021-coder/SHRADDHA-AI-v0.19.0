@@ -98,8 +98,9 @@ def validate_runner_url(url: str) -> str:
             "/runner/profile", "/runner/sync"
         )
     ) or normalized in {"/plots/new", "/awd-reports/new"}
-    if normalized not in {"/", "/login", "/auth/login"} and not allowed_runner:
-        raise ValueError("Only the AKKPS login and allow-listed Runner modules are allowed.")
+    allowed_login = normalized in {"/", "/login", "/auth/login", "/signin", "/sign-in", "/auth/signin", "/otp", "/verify", "/two-factor"} or normalized.startswith("/auth/") or normalized.startswith("/login/")
+    if not allowed_login and not allowed_runner:
+        raise ValueError("Only AKKPS login/verification and allow-listed Runner modules are allowed.")
     return url
 
 
