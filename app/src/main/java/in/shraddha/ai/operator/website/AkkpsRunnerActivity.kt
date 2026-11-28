@@ -43,6 +43,10 @@ class AkkpsRunnerActivity : Activity() {
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingBoundaryUploadUri: Uri? = null
     private var pendingBoundaryUploadPlotId: String? = null
+    private var pendingAwdRepeaterSection: String? = null
+    private var pendingAwdRepeaterUrl: String? = null
+    private var pendingAwdRepeaterBaseline = -1
+    private var pendingAwdRepeaterSignature: String? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
@@ -513,6 +517,325 @@ class AkkpsRunnerActivity : Activity() {
             "GPS Walk रुकी: ${boundaryPoints.size} points • Draft encrypted local save • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
         } else {
             "GPS Walk रुकी, लेकिन draft सुरक्षित नहीं हुआ: ${saved.exceptionOrNull()?.localizedMessage}"
+        }
+    }
+
+    /** Adds exactly one blank row inside one recognized AWD section. */
+    private fun addAwdRepeatedEntry(sectionLabel: String) {
+        val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (route?.module != AkkpsRunnerModule.AWD_REPORTS ||
+            !(route.isCreateRoute || route.isDetailRoute)) {
+            status.text = "पहले AKKPS AWD Reports का Create/Edit form खोलें।"
+            return
+        }
+        if (pendingAwdRepeaterSection != null) {
+            status.text = "पिछला AWD row अभी pending है। पहले उसके values भरें या page को फिर Inspect करें।"
+            return
+        }
+        val script = """
+            (() => {
+              const aliases = {
+                "drying event dates":["drying event dates","drying events","drying date","सूखने की तारीखें","सूखने की घटना"],
+                "re-flooding dates":["re-flooding dates","reflooding dates","re-flooding events","पुनः बाढ़ की तारीखें","दोबारा पानी भरने की तारीखें"],
+                "fertilizer application dates":["fertilizer application dates","fertilizer applications","fertilizer","खाद डालने की तारीखें","उर्वरक"],
+                "other fertilizer rows":["other fertilizer rows","other fertilizers","अन्य खाद","अन्य उर्वरक"],
+                "field visits":["field visits","field visit / audit logs","audit logs","खेत का दौरा","खेत के दौरे"],
+                "historical yield rows":["historical yield rows","historical yields","past yields","ऐतिहासिक उपज"],
+                "water level at each visit":["water level at each visit","water level readings","water readings","हर दौरे का जल स्तर","जल स्तर रीडिंग"]
+              };
+              const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+              const visible=e=>!!(e && e.getClientRects().length &&
+                getComputedStyle(e).display!=="none" && getComputedStyle(e).visibility!=="hidden");
+              const names=aliases[__SECTION__]||[];
+              const headings=[...document.querySelectorAll("h1,h2,h3,h4,h5,legend,[role=heading]")]
+                .filter(visible).filter(e=>names.includes(norm(e.innerText)));
+              if(headings.length!==1) return JSON.stringify({status:"section_ambiguous",count:headings.length});
+              const section=headings[0].closest("fieldset,section,[data-section],[role=group]");
+              if(!section) return JSON.stringify({status:"section_container_missing"});
+              const buttons=[...section.querySelectorAll("button")].filter(visible).filter(b=>{
+                const label=norm(b.innerText||b.getAttribute("aria-label")||b.title);
+                return b.type==="button" && /^(add|add row|add event|add date|add another|add another row|add visit|add application|add reading|add yield|जोड़ें|जोड़ें|जोड़ो|नई प्रविष्टि जोड़ें)$/.test(label);
+              });
+              if(buttons.length!==1) return JSON.stringify({status:"add_control_ambiguous",count:buttons.length});
+              const fields=[...section.querySelectorAll("input,select,textarea")];
+              const signature=fields.map(e=>[e.tagName,e.type||"",e.name||"",e.id||"",e.placeholder||""]);
+              buttons[0].click();
+              return JSON.stringify({status:"clicked",baseline:fields.length,signature});
+            })()
+        """.trimIndent().replace("__SECTION__", JSONObject.quote(sectionLabel))
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result?.optString("status") != "clicked") {
+                status.text = when (result?.optString("status")) {
+                    "section_ambiguous" -> "AWD section heading unique नहीं है; कोई row नहीं जोड़ी गई।"
+                    "section_container_missing" -> "AWD section container नहीं मिला; कोई row नहीं जोड़ी गई।"
+                    "add_control_ambiguous" -> "उस AWD section में एक exact Add button नहीं मिला; कोई row नहीं जोड़ी गई।"
+                    else -> "AWD row add नहीं हुई; page Inspect करें।"
+                }
+                return@evaluateJavascript
+            }
+            pendingAwdRepeaterSection = sectionLabel
+            pendingAwdRepeaterUrl = web.url.orEmpty()
+            pendingAwdRepeaterBaseline = result.optInt("baseline", -1)
+            pendingAwdRepeaterSignature = result.optJSONArray("signature")?.toString()
+            web.postDelayed({
+                if (pendingAwdRepeaterSection != sectionLabel || pendingAwdRepeaterUrl != web.url.orEmpty()) return@postDelayed
+                val verify = """
+                    (() => {
+                      const aliases = {
+                        "drying event dates":["drying event dates","drying events","drying date","सूखने की तारीखें","सूखने की घटना"],
+                        "re-flooding dates":["re-flooding dates","reflooding dates","re-flooding events","पुनः बाढ़ की तारीखें","दोबारा पानी भरने की तारीखें"],
+                        "fertilizer application dates":["fertilizer application dates","fertilizer applications","fertilizer","खाद डालने की तारीखें","उर्वरक"],
+                        "other fertilizer rows":["other fertilizer rows","other fertilizers","अन्य खाद","अन्य उर्वरक"],
+                        "field visits":["field visits","field visit / audit logs","audit logs","खेत का दौरा","खेत के दौरे"],
+                        "historical yield rows":["historical yield rows","historical yields","past yields","ऐतिहासिक उपज"],
+                        "water level at each visit":["water level at each visit","water level readings","water readings","हर दौरे का जल स्तर","जल स्तर रीडिंग"]
+                      };
+                      const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+                      const visible=e=>!!(e && e.getClientRects().length && getComputedStyle(e).display!=="none" && getComputedStyle(e).visibility!=="hidden");
+                      const headings=[...document.querySelectorAll("h1,h2,h3,h4,h5,legend,[role=heading]")].filter(visible)
+                        .filter(e=>(aliases[__SECTION__]||[]).includes(norm(e.innerText)));
+                      if(headings.length!==1) return JSON.stringify({added:false});
+                      const section=headings[0].closest("fieldset,section,[data-section],[role=group]");
+                      if(!section) return JSON.stringify({added:false});
+                      const fields=[...section.querySelectorAll("input,select,textarea")];
+                      const signature=fields.map(e=>[e.tagName,e.type||"",e.name||"",e.id||"",e.placeholder||""]);
+                      const expected=__SIGNATURE__;
+                      const baseline=__BASELINE__;
+                      const prefix=JSON.stringify(signature.slice(0,baseline))===JSON.stringify(expected);
+                      return JSON.stringify({added:prefix && fields.length>baseline,after:fields.length});
+                    })()
+                """.trimIndent()
+                    .replace("__SECTION__", JSONObject.quote(sectionLabel))
+                    .replace("__SIGNATURE__", pendingAwdRepeaterSignature ?: "[]")
+                    .replace("__BASELINE__", pendingAwdRepeaterBaseline.toString())
+                web.evaluateJavascript(verify) { checkRaw ->
+                    val check = runCatching { JSONObject(decode(checkRaw)) }.getOrNull()
+                    if (check?.optBoolean("added") == true) {
+                        status.text = "AWD में $sectionLabel की एक नई खाली row जुड़ी। अब इसी नई row के values voice command से दें; अभी कोई record submit नहीं हुआ।"
+                    } else {
+                        pendingAwdRepeaterSection = null
+                        pendingAwdRepeaterUrl = null
+                        pendingAwdRepeaterBaseline = -1
+                        pendingAwdRepeaterSignature = null
+                        status.text = "AWD row addition verify नहीं हुई। कोई values नहीं भरी गईं; page जाँचें।"
+                    }
+                }
+            }, 350)
+        }
+    }
+
+    /** Fill only the fields appended to the most recently added AWD section row. */
+    private fun fillLatestAwdRepeater(values: List<Pair<String, String>>) {
+        val section = pendingAwdRepeaterSection ?: return
+        if (pendingAwdRepeaterUrl != web.url.orEmpty() || pendingAwdRepeaterBaseline < 0) {
+            status.text = "AWD form बदल गया है; नए row को सुरक्षित रूप से target नहीं कर सकते।"
+            return
+        }
+        if (values.isEmpty() || values.size > 30) {
+            status.text = "नई AWD row के लिए 1–30 स्पष्ट field=value values दें।"
+            return
+        }
+        val payload = JSONArray().apply {
+            values.forEach { (label, value) ->
+                put(JSONObject().put("label", label).put("value", value))
+            }
+        }
+        val script = """
+            ((assignments) => {
+              const aliases = {
+                "drying event dates":["drying event dates","drying events","drying date","सूखने की तारीखें","सूखने की घटना"],
+                "re-flooding dates":["re-flooding dates","reflooding dates","re-flooding events","पुनः बाढ़ की तारीखें","दोबारा पानी भरने की तारीखें"],
+                "fertilizer application dates":["fertilizer application dates","fertilizer applications","fertilizer","खाद डालने की तारीखें","उर्वरक"],
+                "other fertilizer rows":["other fertilizer rows","other fertilizers","अन्य खाद","अन्य उर्वरक"],
+                "field visits":["field visits","field visit / audit logs","audit logs","खेत का दौरा","खेत के दौरे"],
+                "historical yield rows":["historical yield rows","historical yields","past yields","ऐतिहासिक उपज"],
+                "water level at each visit":["water level at each visit","water level readings","water readings","हर दौरे का जल स्तर","जल स्तर रीडिंग"]
+              };
+              const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+              const visible=e=>!!(e && e.getClientRects().length && getComputedStyle(e).display!=="none" && getComputedStyle(e).visibility!=="hidden");
+              const headings=[...document.querySelectorAll("h1,h2,h3,h4,h5,legend,[role=heading]")].filter(visible)
+                .filter(e=>(aliases[__SECTION__]||[]).includes(norm(e.innerText)));
+              if(headings.length!==1) return JSON.stringify({status:"section_changed"});
+              const section=headings[0].closest("fieldset,section,[data-section],[role=group]");
+              if(!section) return JSON.stringify({status:"section_changed"});
+              const fields=[...section.querySelectorAll("input,select,textarea")];
+              const baseline=__BASELINE__, expected=__SIGNATURE__;
+              const signature=fields.map(e=>[e.tagName,e.type||"",e.name||"",e.id||"",e.placeholder||""]);
+              if(fields.length<=baseline || JSON.stringify(signature.slice(0,baseline))!==JSON.stringify(expected))
+                return JSON.stringify({status:"row_changed"});
+              const labelOf=e=>{
+                const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                const wrap=e.closest("label"); if(wrap) labels.push(wrap.innerText||"");
+                const ids=(e.getAttribute("aria-labelledby")||"").split(/\s+/).filter(Boolean);
+                labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
+                return [e.name,e.id,e.placeholder,e.getAttribute("aria-label"),...labels].map(norm);
+              };
+              const planned=[];
+              for(const item of assignments){
+                const key=norm(item.label);
+                const matches=fields.map((e,i)=>({e,i})).filter(x=>x.i>=baseline && labelOf(x.e).includes(key));
+                if(matches.length!==1) return JSON.stringify({status:"field_ambiguous",field:item.label});
+                const e=matches[0].e, type=String(e.type||"").toLowerCase();
+                if(!visible(e)||e.disabled||e.readOnly||["password","hidden","file","button","submit","reset","checkbox","radio"].includes(type))
+                  return JSON.stringify({status:"field_blocked",field:item.label});
+                if(e.tagName==="SELECT"){
+                  const options=[...e.options].filter(o=>norm(o.textContent)===norm(item.value)||String(o.value)===String(item.value));
+                  if(options.length!==1) return JSON.stringify({status:"option_missing",field:item.label});
+                  planned.push({e,value:item.value,option:options[0]});
+                }else planned.push({e,value:String(item.value),option:null});
+              }
+              for(const item of planned){
+                if(item.option){ item.e.value=item.option.value; }
+                else {
+                  const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(item.e),"value")?.set;
+                  if(setter) setter.call(item.e,item.value); else item.e.value=item.value;
+                }
+                item.e.dispatchEvent(new Event("input",{bubbles:true}));
+                item.e.dispatchEvent(new Event("change",{bubbles:true}));
+              }
+              const verified=planned.every(item=>item.option?
+                item.e.selectedOptions.length===1 && norm(item.e.selectedOptions[0].textContent)===norm(item.value):
+                String(item.e.value)===item.value);
+              return JSON.stringify({status:verified?"filled":"verify_failed",fields:planned.map(x=>x.e.name||x.e.id||"field")});
+            })(__VALUES__)
+        """.trimIndent()
+            .replace("__SECTION__", JSONObject.quote(section))
+            .replace("__BASELINE__", pendingAwdRepeaterBaseline.toString())
+            .replace("__SIGNATURE__", pendingAwdRepeaterSignature ?: "[]")
+            .replace("__VALUES__", payload.toString())
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result?.optString("status") == "filled") {
+                pendingAwdRepeaterSection = null
+                pendingAwdRepeaterUrl = null
+                pendingAwdRepeaterBaseline = -1
+                pendingAwdRepeaterSignature = null
+                status.text = "नई AWD row के " + values.size + " fields भरकर verify हुए। Record submit नहीं हुआ; बाकी form review करें।"
+            } else {
+                status.text = when (result?.optString("status")) {
+                    "field_ambiguous" -> "नई AWD row में field " + result.optString("field") + " unique नहीं है; कोई Submit नहीं हुआ।"
+                    "field_blocked" -> "नई AWD row का एक field सुरक्षित रूप से भरने योग्य नहीं है।"
+                    "option_missing" -> "Select option exact नहीं मिला; कोई अनुमानित option नहीं चुना।"
+                    "row_changed", "section_changed" -> "AWD row/form बदल गया; गलत row भरने से बचने के लिए रोक दिया।"
+                    else -> "AWD row fill verify नहीं हुआ। Form manually review करें; Submit नहीं हुआ।"
+                }
+            }
+        }
+    }
+
+    /** Open the website's own file picker for one exact visible document field. */
+    private fun openDocumentField(fieldLabel: String) {
+        val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (route?.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
+            !(route.isCreateRoute || route.isDetailRoute)) {
+            status.text = "पहले Farmer, Plot या AWD का Create/Edit form खोलें।"
+            return
+        }
+        val script = """
+            (() => {
+              const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+              const key=norm(__LABEL__);
+              const forms=[...document.querySelectorAll("form")].filter(f=>f.getClientRects().length);
+              if(forms.length!==1) return JSON.stringify({status:"form_ambiguous"});
+              const matches=[...forms[0].querySelectorAll('input[type="file"]')].filter(e=>{
+                const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                const ids=(e.getAttribute("aria-labelledby")||"").split(/\s+/).filter(Boolean);
+                labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
+                labels.push(e.getAttribute("aria-label")||"",e.name||"",e.id||"");
+                return labels.map(norm).some(x=>x===key || x.includes(key));
+              });
+              if(matches.length!==1) return JSON.stringify({status:"file_field_ambiguous",count:matches.length});
+              matches[0].click();
+              return JSON.stringify({status:"picker_opened",accept:matches[0].accept||""});
+            })()
+        """.trimIndent().replace("__LABEL__", JSONObject.quote(fieldLabel))
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = when (result?.optString("status")) {
+                "picker_opened" -> "AKKPS का $fieldLabel file picker खुला। File आप चुनें; website upload अलग action है।"
+                "form_ambiguous" -> "एक स्पष्ट AKKPS form नहीं मिला; document picker नहीं खोला।"
+                else -> "Exact $fieldLabel file field नहीं मिला या ambiguous है; कोई file attach नहीं हुई।"
+            }
+        }
+    }
+
+    /** User-spoken exact autocomplete phrase; only a unique exact visible option is selected. */
+    private fun selectAutocompleteOption(request: AkkpsAutocompleteRequest) {
+        val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (route?.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
+            !(route.isCreateRoute || route.isDetailRoute)) {
+            status.text = "पहले Farmer, Plot या AWD का Create/Edit form खोलें।"
+            return
+        }
+        val fieldLabel = request.fieldLabel
+        val query = request.query
+        val fillScript = """
+            (() => {
+              const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+              const key=norm(__LABEL__);
+              const visible=e=>!!(e && e.getClientRects().length && getComputedStyle(e).display!=="none" && getComputedStyle(e).visibility!=="hidden");
+              const forms=[...document.querySelectorAll("form")].filter(visible);
+              if(forms.length!==1) return JSON.stringify({status:"form_ambiguous"});
+              const candidates=[...forms[0].querySelectorAll("input:not([type]),input[type=text],input[type=search]")]
+                .filter(visible).filter(e=>{
+                  const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                  const ids=(e.getAttribute("aria-labelledby")||"").split(/\s+/).filter(Boolean);
+                  labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
+                  labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
+                  return labels.map(norm).includes(key);
+                });
+              if(candidates.length!==1 || candidates[0].disabled || candidates[0].readOnly)
+                return JSON.stringify({status:"field_ambiguous",count:candidates.length});
+              const field=candidates[0], value=__QUERY__;
+              const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")?.set;
+              if(setter) setter.call(field,value); else field.value=value;
+              field.dispatchEvent(new Event("input",{bubbles:true}));
+              field.dispatchEvent(new Event("change",{bubbles:true}));
+              return JSON.stringify({status:"query_entered"});
+            })()
+        """.trimIndent().replace("__LABEL__", JSONObject.quote(fieldLabel))
+            .replace("__QUERY__", JSONObject.quote(query))
+        web.evaluateJavascript(fillScript) { raw ->
+            val first = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (first?.optString("status") != "query_entered") {
+                status.text = "Autocomplete field $fieldLabel unique नहीं है; कोई option नहीं चुना।"
+                return@evaluateJavascript
+            }
+            status.text = "$fieldLabel में search किया जा रहा है; exact suggestion की प्रतीक्षा…"
+            web.postDelayed({
+                val chooseScript = """
+                    (() => {
+                      const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+                      const key=norm(__QUERY__), label=norm(__LABEL__);
+                      const forms=[...document.querySelectorAll("form")].filter(f=>f.getClientRects().length);
+                      if(forms.length!==1) return JSON.stringify({status:"form_ambiguous"});
+                      const fields=[...forms[0].querySelectorAll("input:not([type]),input[type=text],input[type=search]")];
+                      const fieldMatches=fields.filter(e=>{
+                        const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                        labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
+                        return labels.map(norm).includes(label);
+                      });
+                      const options=[...document.querySelectorAll('[role="option"]')]
+                        .filter(e=>e.getClientRects().length && getComputedStyle(e).display!=="none" &&
+                          getComputedStyle(e).visibility!=="hidden" && norm(e.innerText||e.getAttribute("aria-label"))===key);
+                      if(fieldMatches.length!==1) return JSON.stringify({status:"field_changed"});
+                      if(options.length!==1) return JSON.stringify({status:"option_ambiguous",count:options.length});
+                      options[0].click();
+                      const value=String(fieldMatches[0].value||"").trim();
+                      return JSON.stringify({status:norm(value)===key?"selected":"selection_unverified",value});
+                    })()
+                """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+                    .replace("__LABEL__", JSONObject.quote(fieldLabel))
+                web.evaluateJavascript(chooseScript) { chooseRaw ->
+                    val chosen = runCatching { JSONObject(decode(chooseRaw)) }.getOrNull()
+                    status.text = when (chosen?.optString("status")) {
+                        "selected" -> "$fieldLabel में exact suggestion $query चुना और verify हुआ। Record submit नहीं हुआ।"
+                        "option_ambiguous" -> "Exact suggestion " + query + " unique नहीं मिला (" + chosen.optInt("count") + "); कोई option auto-select नहीं किया।"
+                        else -> "Autocomplete selection verify नहीं हुई; website पर manually जाँचें।"
+                    }
+                }
+            }, 650)
         }
     }
 
@@ -1148,6 +1471,18 @@ class AkkpsRunnerActivity : Activity() {
             prepareBoundaryForAkkpsUpload()
             return
         }
+        AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection(raw)?.let { section ->
+            addAwdRepeatedEntry(section)
+            return
+        }
+        AkkpsRunnerPageWorkflowPolicy.autocompleteRequest(raw)?.let { request ->
+            selectAutocompleteOption(request)
+            return
+        }
+        AkkpsRunnerPageWorkflowPolicy.documentFieldLabel(raw)?.let { fieldLabel ->
+            openDocumentField(fieldLabel)
+            return
+        }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
@@ -1230,6 +1565,14 @@ class AkkpsRunnerActivity : Activity() {
         val values = parsed.assignments
         if (values.isEmpty()) {
             status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
+            return
+        }
+        if (pendingAwdRepeaterSection != null) {
+            if (wantsSubmit) {
+                status.text = "पहले नए AWD row के values भरें और review करें। Submit के लिए अलग command/confirmation आवश्यक है।"
+                return
+            }
+            fillLatestAwdRepeater(values)
             return
         }
         fillValues(values, wantsSubmit)
