@@ -45,4 +45,48 @@ class UniversalVisibleTaskPlannerTest {
         val bad = """{"steps":[{"action":"DELETE","target":"file"}]}"""
         assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(bad, "delete file", snapshot).error)
     }
+    @Test fun permitsExplicitSingleRecipientSendOnlyWithExactTypedMessage() {
+        val messagingScreen = snapshot.copy(elements = snapshot.elements + listOf(
+            ScreenElement("rahul", "Rahul", "", "TextView", Rect(0,100,100,140), true, false, false, false),
+            ScreenElement("message", "", "Message", "EditText", Rect(0,150,100,190), false, true, false, false, hintText = "Message"),
+            ScreenElement("send", "Send", "", "Button", Rect(0,200,100,240), true, false, false, false)
+        ))
+        val json = """{"steps":[
+            {"action":"CLICK_TEXT","target":"Rahul"},
+            {"action":"TYPE_TEXT","target":"Message","value":"I will reach in 10 minutes"},
+            {"action":"CLICK_TEXT","target":"Send","expectedVisibleText":"I will reach in 10 minutes"}
+        ]}"""
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "WhatsApp पर Rahul को I will reach in 10 minutes भेजो", messagingScreen
+        )
+        assertNull(result.error)
+        assertTrue(result.steps.last().explicitlyAuthorizedByUser)
+    }
+
+    @Test fun rejectsSendWithoutExplicitRecipientOrExactMessage() {
+        val messagingScreen = snapshot.copy(elements = snapshot.elements + listOf(
+            ScreenElement("message", "", "Message", "EditText", Rect(0,150,100,190), false, true, false, false, hintText = "Message"),
+            ScreenElement("send", "Send", "", "Button", Rect(0,200,100,240), true, false, false, false)
+        ))
+        val json = """{"steps":[
+            {"action":"TYPE_TEXT","target":"Message","value":"Hello"},
+            {"action":"CLICK_TEXT","target":"Send","expectedVisibleText":"Hello"}
+        ]}"""
+        assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(json, "send Hello", messagingScreen).error)
+    }
+
+    @Test fun allowsTargetsOnlyAfterAVisibleScreenTransitionAndRechecksAtExecution() {
+        val json = """{"steps":[
+            {"action":"OPEN_APP","target":"WhatsApp"},
+            {"action":"CLICK_TEXT","target":"Chats"},
+            {"action":"TYPE_TEXT","target":"Search","value":"Rahul"}
+        ]}"""
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "WhatsApp खोलो और Rahul को खोजो", snapshot
+        )
+        assertNull(result.error)
+        assertTrue(result.steps[1].requiresRuntimeTargetResolution)
+        assertTrue(result.steps[2].requiresRuntimeTargetResolution)
+    }
+
 }
