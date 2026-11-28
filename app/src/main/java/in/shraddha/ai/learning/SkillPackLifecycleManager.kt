@@ -326,15 +326,25 @@ class SkillPackLifecycleManager(context: Context) {
     private fun writeMetadata(content: File, metadata: JSONObject) {
         val target = File(content.parentFile, content.name + ".json")
         val temp = File(content.parentFile, content.name + ".json.tmp")
+        val backup = File(content.parentFile, content.name + ".json.bak")
         val bytes = metadata.toString().toByteArray(Charsets.UTF_8)
         try {
+            check(!backup.exists() || backup.delete()) { "Could not clear stale Skill Factory metadata backup." }
             FileOutputStream(temp).use { output ->
                 output.write(bytes)
                 output.fd.sync()
             }
-            check(temp.renameTo(target)) { "Could not commit Skill Factory provenance metadata." }
+            if (target.exists()) {
+                check(target.renameTo(backup)) { "Could not preserve existing Skill Factory provenance metadata." }
+            }
+            if (!temp.renameTo(target)) {
+                if (backup.exists()) backup.renameTo(target)
+                throw IllegalStateException("Could not commit Skill Factory provenance metadata.")
+            }
+            backup.delete()
         } finally {
             temp.delete()
+            if (!target.exists() && backup.exists()) backup.renameTo(target)
             bytes.fill(0)
         }
     }
