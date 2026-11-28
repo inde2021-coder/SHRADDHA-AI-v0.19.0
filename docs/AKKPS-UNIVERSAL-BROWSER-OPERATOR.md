@@ -26,6 +26,7 @@ From the paired Android PC command surface, these commands are supported:
 - `Open AKKPS` — open the verified AKKPS portal in Edge.
 - `Open AKKPS Runner` — open the Runner route in the same authenticated Edge session.
 - `Inspect AKKPS` — return a bounded inventory of visible page structure.
+- `Open AKKPS Farmers`, `Open AKKPS Plots`, `Open AKKPS AWD Reports`, `Open AKKPS Profile`, or `Open AKKPS Data Sync` — navigate only to the exact allow-listed Runner module routes.
 
 Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. A submit click is reported as unverified until the record is independently checked.
 
