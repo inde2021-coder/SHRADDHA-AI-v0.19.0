@@ -561,14 +561,19 @@ class AkkpsBrowserOperator:
             raise RuntimeError("The exact Add-row control is missing, ambiguous or disabled.")
         if (add.first.get_attribute("type") or "").casefold() != "button":
             raise RuntimeError("Add-row control is not explicitly type=button; refusing a possible form submit.")
-        before = form.locator("input,select,textarea").count()
+        field_locator = form.locator("input,select,textarea")
+        before = field_locator.count()
+        baseline_signature = field_locator.evaluate_all(
+            "(els) => els.map(e => [e.tagName, e.type || '', e.name || '', e.id || '', e.placeholder || ''])"
+        )
         add.first.click()
         self.page.wait_for_timeout(250)
         after = form.locator("input,select,textarea").count()
         if after <= before:
             raise RuntimeError("No new visible form fields appeared; row addition was not verified.")
         self._last_repeater_snapshot = {
-            "section": section_label, "url": self.page.url, "baseline_field_count": before
+            "section": section_label, "url": self.page.url, "baseline_field_count": before,
+            "baseline_signature": baseline_signature
         }
         return {"section": section_label, "fields_before": before, "fields_after": after,
                 "row_added": True, "submitted": False,
@@ -590,6 +595,11 @@ class AkkpsBrowserOperator:
         baseline = int(snapshot["baseline_field_count"])
         if fields.count() <= baseline:
             raise RuntimeError("The new AWD row is no longer present.")
+        current_signature = fields.evaluate_all(
+            "(els) => els.map(e => [e.tagName, e.type || '', e.name || '', e.id || '', e.placeholder || ''])"
+        )
+        if current_signature[:baseline] != snapshot.get("baseline_signature"):
+            raise RuntimeError("The AWD form changed after the row was added; refusing to fill a different form.")
         planned = []
         for label, value in values.items():
             label = " ".join(str(label or "").split())
