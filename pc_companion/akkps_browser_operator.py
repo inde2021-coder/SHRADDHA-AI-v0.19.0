@@ -211,7 +211,9 @@ class AkkpsBrowserOperator:
             const label = id ? document.querySelector('label[for="' + CSS.escape(id) + '"]') : null;
             return clean(label?.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.name || e.id);
           };
-          const fields = [...document.querySelectorAll('input,select,textarea')]
+          const visibleForms = [...document.querySelectorAll('form')].filter(visible);
+          const fieldScope = visibleForms.length === 1 ? visibleForms[0] : document;
+          const fields = [...fieldScope.querySelectorAll('input,select,textarea')]
             .filter(visible).map(e => ({
               label: labelFor(e), name: clean(e.name || e.id),
               type: clean(e.type || e.tagName.toLowerCase()).toLowerCase(),
