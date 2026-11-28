@@ -37,7 +37,7 @@ object ActionExecutor {
             "open_akkps_runner" -> {
                 val command = args.optString("command").trim()
                 if (command.length > 3000) return result.put("status", "error").put("message", "AKKPS command अधिकतम 3000 characters की हो सकती है।")
-                if (Regex("(?i)\\b(password|passcode|otp|pin|captcha|security code|verification code)\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(command)) {
+                if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(command)) {
                     return result.put("status", "error").put("message", "Password, OTP, PIN या CAPTCHA सामग्री Runner command में नहीं भेजी जा सकती। वेबसाइट पर स्वयं दर्ज करें।")
                 }
                 val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
