@@ -76,45 +76,6 @@ object CouncilCostBudget {
         }
     }
 
-    /** Reject a provider call before dispatch when the configured monthly cap is already reached. */
-    @Synchronized
-    fun ensureBudgetAllowsCall(context: Context, provider: String) {
-        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val limit = p.getFloat(KEY_LIMIT, 0f).toDouble()
-        if (limit <= 0.0) return
-        val month = YearMonth.now(ZoneOffset.UTC).toString()
-        if (p.getString(KEY_MONTH, null) != month) {
-            check(p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f)
-                .putBoolean(KEY_UNKNOWN, false).commit()) { "Could not initialize monthly API usage counters." }
-        }
-        check(!p.getBoolean(KEY_UNKNOWN, false)) {
-            "Monthly API budget is paused because earlier usage for $provider could not be verified. Review usage and pricing before retrying."
-        }
-        val spend = p.getFloat(KEY_SPEND, 0f).toDouble()
-        check(spend < limit) {
-            "Monthly API budget reached: estimated spend USD $spend has reached configured limit USD $limit. Further provider calls are stopped."
-        }
-    }
-
-    /** Fail closed if the usage counters cannot be trusted for a budgeted cloud request. */
-    fun requireUsageCountersAvailable(context: Context, operation: String) {
-        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (p.getFloat(KEY_LIMIT, 0f).toDouble() <= 0.0) return
-        val month = YearMonth.now(ZoneOffset.UTC).toString()
-        if (p.getString(KEY_MONTH, null) != month) {
-            check(p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f)
-                .putBoolean(KEY_UNKNOWN, false).commit()) { "Could not initialize monthly API usage counters." }
-        }
-        check(!p.getBoolean(KEY_UNKNOWN, false)) {
-            "Cannot start $operation: monthly usage counters are marked unknown. Review provider usage before enabling budgeted requests."
-        }
-        val spend = p.getFloat(KEY_SPEND, 0f).toDouble()
-        val limit = p.getFloat(KEY_LIMIT, 0f).toDouble()
-        check(spend < limit) {
-            "Cannot start $operation: monthly API budget has been reached (USD $spend / USD $limit)."
-        }
-    }
-
     @Synchronized
     fun recordUsageAndEnforce(context: Context, usage: com.Lia.assistant.voice.ProviderTokenUsage) {
         val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
