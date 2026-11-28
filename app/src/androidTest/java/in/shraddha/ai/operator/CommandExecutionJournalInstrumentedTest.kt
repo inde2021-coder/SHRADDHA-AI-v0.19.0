@@ -68,6 +68,30 @@ class CommandExecutionJournalInstrumentedTest {
         assertTrue("Corrupted durable state must not be treated as an empty journal.", blocked)
     }
 
+    @Test fun storagePruningNeverEvictsAnUnresolvedPlan() {
+        val active = requireNotNull(journal.createPlan(
+            "critical action one",
+            listOf(CommandTaskStep("critical-step", "messaging", "send"))
+        ))
+        assertEquals(CommandStepState.RUNNING, requireNotNull(journal.markRunning(active.id, "critical-step")).state)
+
+        for (index in 1..105) {
+            val completed = requireNotNull(journal.createPlan(
+                "completed independent task $index",
+                listOf(CommandTaskStep("step-$index", "files", "read"))
+            ))
+            assertEquals(CommandStepState.RUNNING, requireNotNull(journal.markRunning(completed.id, "step-$index")).state)
+            assertEquals(CommandStepState.SUCCEEDED,
+                requireNotNull(journal.finish(completed.id, "step-$index", CommandStepState.SUCCEEDED, "done")).state)
+        }
+
+        val restarted = CommandExecutionJournal(context)
+        assertNotNull("Unresolved plan must survive history pruning.", restarted.get(active.id))
+        assertTrue(restarted.recoverInterruptedSteps())
+        assertEquals(CommandStepState.UNCERTAIN,
+            requireNotNull(restarted.get(active.id)).steps.single().state)
+    }
+
     @Test fun malformedJournalEntryBlocksRecovery() {
         val prefs = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
         assertTrue(prefs.edit().putString("plans_v1", """[{"id":"invalid"}]""").commit())
