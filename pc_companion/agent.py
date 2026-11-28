@@ -93,6 +93,11 @@ class PcCompanionApp:
         self.phone_control_grant_until = 0.0
         self.device_token = None
         self.e2e_crypto = DeviceE2ECrypto()
+        try:
+            from .akkps_browser_operator import AkkpsBrowserOperator
+        except ImportError:
+            from akkps_browser_operator import AkkpsBrowserOperator
+        self.akkps_operator = AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
         self.peer_keys = {}
         self.e2e_lock = threading.RLock()
         self.seen_remote_actions = {}
@@ -193,7 +198,7 @@ class PcCompanionApp:
                 from .akkps_browser_ui import AkkpsBrowserWindow
             except ImportError:
                 from akkps_browser_ui import AkkpsBrowserWindow
-            AkkpsBrowserWindow(self.root)
+            AkkpsBrowserWindow(self.root, self.akkps_operator)
         except Exception as exc:
             messagebox.showerror("AKKPS Website Operator", str(exc), parent=self.root)
 
@@ -1280,7 +1285,7 @@ class PcCompanionApp:
                 )
                 message = json.dumps(result, ensure_ascii=False)[:1200] if isinstance(result, dict) else str(result)
             else:
-                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
+                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds(), akkps_handler=self._run_akkps_action)
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
@@ -1296,6 +1301,21 @@ class PcCompanionApp:
             if peer_id and action_id:
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "result": message[:240]}, action_id, action.get("kind", ""))
+
+    def _run_akkps_action(self, kind):
+        if kind == "akkps_open":
+            inventory = self.akkps_operator.start()
+        elif kind == "akkps_runner":
+            if self.akkps_operator._page is None:
+                raise RuntimeError("पहले Windows पर AKKPS वेबसाइट खोलकर स्वयं लॉगिन करें।")
+            inventory = self.akkps_operator.open_runner()
+        else:
+            inventory = self.akkps_operator.inventory()
+        return json.dumps({
+            "title": inventory.title, "url": inventory.url,
+            "navigation": list(inventory.links), "fields": [f.__dict__ for f in inventory.fields],
+            "buttons": list(inventory.buttons), "table_headers": [list(x) for x in inventory.table_headers]
+        }, ensure_ascii=False)[:10000]
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [
@@ -1430,6 +1450,10 @@ class PcCompanionApp:
 
     def _close(self):
         self.disconnect()
+        try:
+            self.akkps_operator.close()
+        except Exception:
+            pass
         self.stop_event.set()
         self.root.destroy()
 
