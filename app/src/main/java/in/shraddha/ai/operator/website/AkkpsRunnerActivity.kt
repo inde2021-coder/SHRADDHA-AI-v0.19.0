@@ -827,6 +827,7 @@ class AkkpsRunnerActivity : Activity() {
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
             val module = route?.module?.name ?: obj.optString("module")
+            val currentModule = route?.module
             val safeInventory = JSONObject().put("title", module)
                 .put("path", obj.optString("path"))
                 .put("actions", JSONArray().apply {
@@ -847,10 +848,10 @@ class AkkpsRunnerActivity : Activity() {
                             AkkpsRunnerModule.PROFILE -> "/runner/profile"
                             AkkpsRunnerModule.SYNC -> "/runner/sync"
                         }
-                        put(JSONObject().put("label", item.optString("label")).put("path", targetPath).put("active", targetModule == route?.module))
+                        put(JSONObject().put("label", item.optString("label")).put("path", targetPath).put("active", targetModule == currentModule))
                     }
-                    if (route != null && (0 until length()).none { optJSONObject(it)?.optString("label") == route.module.label }) {
-                        put(JSONObject().put("label", route.module.label).put("path", route.module.basePath).put("active", true))
+                    if (currentModule != null && (0 until length()).none { optJSONObject(it)?.optString("label") == currentModule.label }) {
+                        put(JSONObject().put("label", currentModule.label).put("path", currentModule.basePath).put("active", true))
                     }
                 })
             if (route != null) runCatching { AkkpsPageInventory.save(this, safeInventory) }
