@@ -4,12 +4,10 @@ import json
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
-
 try:
     from .akkps_browser_operator import AkkpsBrowserOperator, DEFAULT_HOME
 except ImportError:
     from akkps_browser_operator import AkkpsBrowserOperator, DEFAULT_HOME
-
 
 class AkkpsBrowserWindow:
     def __init__(self, parent):
@@ -17,9 +15,7 @@ class AkkpsBrowserWindow:
         self.window.title("Shraddha AI • AKKPS Website Operator")
         self.window.geometry("760x620")
         self.window.minsize(620, 480)
-        self.operator = AkkpsBrowserOperator(
-            Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile"
-        )
+        self.operator = AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
         self.status = tk.StringVar(value="Browser not started")
         self._build()
 
@@ -27,24 +23,20 @@ class AkkpsBrowserWindow:
         root = ttk.Frame(self.window, padding=14)
         root.pack(fill="both", expand=True)
         ttk.Label(root, text="AKKPS WEBSITE OPERATOR", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        ttk.Label(root, text="Sign in yourself in the visible browser. Passwords and OTPs are never read or stored by Shraddha AI.",
-                  wraplength=700).pack(anchor="w", pady=(4, 10))
-        bar = ttk.Frame(root)
-        bar.pack(fill="x")
+        ttk.Label(root, text="Sign in yourself in the visible browser. Passwords and OTPs are never read or stored by Shraddha AI.", wraplength=700).pack(anchor="w", pady=(4, 10))
+        bar = ttk.Frame(root); bar.pack(fill="x")
         ttk.Button(bar, text="Open AKKPS Login", command=self.start).pack(side="left")
         ttk.Button(bar, text="Open Runner", command=self.open_runner).pack(side="left", padx=6)
         ttk.Button(bar, text="Inspect Current Page", command=self.inspect).pack(side="left")
         ttk.Button(bar, text="Close Browser", command=self.close_browser).pack(side="left", padx=6)
         ttk.Label(root, textvariable=self.status, foreground="#146c43").pack(anchor="w", pady=8)
-        self.output = tk.Text(root, wrap="word", height=25)
-        self.output.pack(fill="both", expand=True)
-        self.output.insert("end", "Workflow: open login → sign in manually → open Runner → inspect modules.\n")
+        self.output = tk.Text(root, wrap="word", height=25); self.output.pack(fill="both", expand=True)
+        self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
         self.window.protocol("WM_DELETE_WINDOW", self.close)
 
     def _show(self, value):
-        self.output.configure(state="normal")
-        self.output.delete("1.0", "end")
+        self.output.configure(state="normal"); self.output.delete("1.0", "end")
         self.output.insert("end", json.dumps(value, ensure_ascii=False, indent=2)[:24000])
         self.output.configure(state="disabled")
 
@@ -73,11 +65,8 @@ class AkkpsBrowserWindow:
             messagebox.showerror("Page inspection failed", str(exc), parent=self.window)
 
     def close_browser(self):
-        try:
-            self.operator.close()
-        finally:
-            self.status.set("Browser closed.")
+        try: self.operator.close()
+        finally: self.status.set("Browser closed.")
 
     def close(self):
-        self.close_browser()
-        self.window.destroy()
+        self.close_browser(); self.window.destroy()
