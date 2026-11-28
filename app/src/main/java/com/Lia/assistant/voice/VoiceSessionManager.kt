@@ -227,14 +227,11 @@ object VoiceSessionManager {
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val persistentRecap = if (PersistentChatMemory.isEnabled(currentContext)) {
-            runCatching { PersistentChatMemory.recap(currentContext) }
-                .onFailure {
-                    _statusText.value = "Encrypted conversation memory is unavailable; saved context was not loaded."
-                }
-                .getOrNull()
-        } else null
-        val recap = persistentRecap ?: ConversationMemory.recap()
+        val recap = runCatching {
+            PersistentChatMemory.promptRecap(currentContext, ConversationMemory.recap())
+        }.onFailure {
+            _statusText.value = "Encrypted conversation memory is unavailable; saved context was not loaded."
+        }.getOrNull()
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
