@@ -298,7 +298,11 @@ object VoiceSessionManager {
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val recap = ConversationMemory.recap()
+        val recap = runCatching {
+            PersistentChatMemory.promptRecap(currentContext, ConversationMemory.recap())
+        }.onFailure {
+            _statusText.value = "Encrypted conversation memory is unavailable; saved context was not loaded."
+        }.getOrNull()
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
@@ -360,7 +364,12 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 VoiceLatencyTracker.markUserTurnStart()
                 ConversationMemory.recordTurn(MemoryRole.USER, text)
-                scope.launch { PersistentChatMemory.record(currentContext, "User", text) }
+                scope.launch {
+                    val saved = PersistentChatMemory.record(currentContext, "User", text)
+                    if (saved.isFailure && PersistentChatMemory.isEnabled(currentContext)) {
+                        _statusText.value = "Encrypted conversation memory is unavailable; this turn was not saved."
+                    }
+                }
                 val detected = LanguageDetector.detect(text)
                 if (detected != "UNKNOWN") {
                     _detectedLanguage.value = detected
@@ -455,6 +464,12 @@ object VoiceSessionManager {
                 }
                 if (response.isNotBlank()) {
                     ConversationMemory.recordTurn(MemoryRole.ASSISTANT, response)
+                    scope.launch {
+                        val saved = PersistentChatMemory.record(currentContext, "Assistant", response)
+                        if (saved.isFailure && PersistentChatMemory.isEnabled(currentContext)) {
+                            _statusText.value = "Encrypted conversation memory is unavailable; this turn was not saved."
+                        }
+                    }
                     VoiceLatencyTracker.markTurnComplete()
                     speakWithShraddha(currentContext, currentEpoch, assistantName, response)
                 } else {
