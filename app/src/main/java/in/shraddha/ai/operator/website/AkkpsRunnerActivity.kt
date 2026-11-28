@@ -256,6 +256,15 @@ class AkkpsRunnerActivity : Activity() {
                     }
                     return false
                 }
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    if (pendingAwdRepeaterSection != null) {
+                        pendingAwdRepeaterSection = null
+                        pendingAwdRepeaterUrl = null
+                        pendingAwdRepeaterBaseline = -1
+                        pendingAwdRepeaterSignature = null
+                    }
+                    super.onPageStarted(view, url, favicon)
+                }
                 override fun onPageFinished(view: WebView, url: String) {
                     if (pendingAwdRepeaterUrl != null && pendingAwdRepeaterUrl != url) {
                         pendingAwdRepeaterSection = null
