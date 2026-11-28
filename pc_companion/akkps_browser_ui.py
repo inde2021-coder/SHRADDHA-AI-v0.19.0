@@ -62,6 +62,7 @@ class AkkpsBrowserWindow:
         ttk.Button(workflows, text="Fill newest AWD row…", command=self.fill_awd_row).pack(side="left", padx=3)
         ttk.Button(workflows, text="Autocomplete…", command=self.autocomplete).pack(side="left", padx=3)
         ttk.Button(workflows, text="Attach document…", command=self.attach_document).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Upload attached document…", command=self.upload_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
@@ -223,6 +224,22 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Document attachment failed", str(exc), parent=self.window)
+
+    def upload_document(self):
+        try:
+            label = simpledialog.askstring("Upload document", "Exact visible Upload button label:", parent=self.window)
+            if not label: return
+            preview = {"button": label, "action": "Upload selected document only; no record submit"}
+            if not messagebox.askyesno("Confirm document upload", json.dumps(preview, ensure_ascii=False), parent=self.window): return
+            result = self.operator.upload_attached_document_after_confirmation(label)
+            if result.get("upload_verified"):
+                self.status.set("Document upload response verified. Record NOT submitted.")
+            else:
+                self.status.set("Document upload outcome UNCERTAIN. Do not retry until checked.")
+                messagebox.showwarning("Check document upload", "The upload may have reached the server. Check the document list/status before retrying.", parent=self.window)
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Document upload blocked", str(exc), parent=self.window)
 
     def inspect_map(self):
         try:
