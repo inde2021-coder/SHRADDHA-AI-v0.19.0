@@ -850,7 +850,7 @@ Rules:
             log.text = "क्लिक करने वाले दृश्य बटन/टेक्स्ट का नाम लिखें।"
             return
         }
-        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY
+        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT, OperatorActionType.SELECT_FILE)) Risk.SENSITIVE else Risk.READ_ONLY
         val engine = OperatorEngine(
             emit = { event -> runOnUiThread {
                 val detail = event.snapshot?.let { "\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
