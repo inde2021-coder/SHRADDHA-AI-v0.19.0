@@ -27,6 +27,9 @@ object MainBrainProviderGateway {
     val supportedProviders: Set<String> = providerOrder.toSet()
 
     fun configuredProviders(context: Context, preferredProvider: String? = null): List<String> {
+        // Even a provider-discovery/status request contacts the cloud gateway. Do not
+        // make that request until the user has explicitly enabled Online AI.
+        if (!OnlineAiConsent.isAllowed(context)) return emptyList()
         val preferred = (preferredProvider
             ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
             .uppercase()
@@ -42,8 +45,13 @@ object MainBrainProviderGateway {
     }
 
     /** Secure realtime Gemini Live session token; raw provider credentials never enter the UI. */
-    suspend fun fetchLiveVoiceToken(context: Context): String =
-        VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
+    suspend fun fetchLiveVoiceToken(context: Context): String {
+        OnlineAiConsent.requireAllowed(context)
+        CouncilCostBudget.requireUsageCountersAvailable(context, "Gemini Live voice")
+        return VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
+    }
+
+    private const val MAX_STREAM_OUTPUT_CHARS = 64_000
 
     data class StreamingTextResult(val httpCode: Int, val text: String, val finishReason: String?)
 
@@ -53,9 +61,15 @@ object MainBrainProviderGateway {
         systemPrompt: String,
         onChunk: (String) -> Unit
     ): StreamingTextResult {
+        if (!OnlineAiConsent.isAllowed(context)) {
+            return StreamingTextResult(403, "Online AI is disabled by the user.", null)
+        }
+        CouncilCostBudget.requireUsageCountersAvailable(context, "Streaming Gemini generation")
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
-        val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(apiKey) }
+        // Model discovery itself is a cloud request; consent may have changed since entry.
+        OnlineAiConsent.requireAllowed(context)
+        val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(context.applicationContext, apiKey) }
         val modelEndpoint = if (model.startsWith("models/")) model else "models/$model"
         val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:streamGenerateContent?alt=sse"
         val parts = JSONArray().put(JSONObject().put("text", systemPrompt.take(32_000)))
@@ -71,7 +85,10 @@ object MainBrainProviderGateway {
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
-        GeminiTextClient.internalHttpClient.newCall(request).execute().use { response ->
+        // Re-check at the transport boundary so revocation during model discovery blocks dispatch.
+        OnlineAiConsent.requireAllowed(context)
+        val call = GeminiTextClient.internalHttpClient.newCall(request)
+        call.execute().use { response ->
             if (!response.isSuccessful) return StreamingTextResult(response.code, "", null)
             val input = response.body?.byteStream()
                 ?: return StreamingTextResult(response.code, "", null)
@@ -80,11 +97,21 @@ object MainBrainProviderGateway {
             var finishReason: String? = null
             var line: String? = reader.readLine()
             while (line != null) {
+                // Revoking Online AI during a long stream stops further cloud reads and
+                // prevents any additional generated text from reaching the UI.
+                if (!OnlineAiConsent.isAllowed(context)) {
+                    call.cancel()
+                    return StreamingTextResult(403, accumulated.toString(), "CONSENT_REVOKED")
+                }
                 val trimmed = line.trim()
                 if (trimmed.startsWith("data:")) {
                     val data = trimmed.substring(5).trim()
                     SseParser.extractFinishReason(data)?.let { finishReason = it }
                     SseParser.extractText(data)?.takeIf { it.isNotEmpty() }?.let { chunk ->
+                        if (accumulated.length + chunk.length > MAX_STREAM_OUTPUT_CHARS) {
+                            call.cancel()
+                            return StreamingTextResult(413, accumulated.toString(), "OUTPUT_LIMIT")
+                        }
                         accumulated.append(chunk)
                         onChunk(chunk)
                     }
@@ -102,9 +129,14 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
+        if (!OnlineAiConsent.isAllowed(context)) {
+            return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
+        }
         val provider = providerName.uppercase()
         if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
+        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, provider) }
+            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
         // Hybrid routing: use the authenticated HTTPS agent when this provider is configured there.
         // A failed configured cloud route is surfaced; it is not silently retried against a
@@ -119,21 +151,27 @@ object MainBrainProviderGateway {
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 runCatching { com.Lia.assistant.voice.ProviderTokenUsage(provider, cloud.model, cloud.inputTokens, cloud.outputTokens) }.getOrNull()
             } else null
+            // VoiceGatewaySettings.executeAgent meters this response at the transport boundary.
             return ChatReplyResult.Success(cloud.text, usage)
         }
         // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
-        return if (provider == "GEMINI") {
+        // Consent is checked again after gateway discovery and immediately before any direct provider call.
+        OnlineAiConsent.requireAllowed(context)
+        val directResult = if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
                 return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
             }
             if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
-            else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
+            else GeminiTextClient.reply(context.applicationContext, key, systemInstruction.take(8_000), boundedHistory)
         } else {
             MultiProviderChatClient.reply(context, provider, systemInstruction.take(8_000), boundedHistory)
         }
+        // Direct Gemini and multi-provider clients meter their own transport responses.
+        return directResult
     }
 
     fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
+        OnlineAiConsent.requireAllowed(context)
         VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it.text }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text
@@ -148,13 +186,14 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         prompt: String
     ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
+        OnlineAiConsent.requireAllowed(context)
+        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, providerName) }
+            .getOrElse { error(it.message ?: "Monthly API budget blocked this request.") }
         VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
-            } else {
-                CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
-                null
-            }
+            } else null
+            // VoiceGatewaySettings.executeAgent meters this response at the transport boundary.
             return cloud.text to usage
         }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
