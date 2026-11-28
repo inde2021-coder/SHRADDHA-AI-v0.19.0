@@ -8,11 +8,11 @@ import com.Lia.assistant.data.VoiceGatewaySettings
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
-import `in`.shraddha.ai.operator.CommandFollowUpContextRuntime
-import `in`.shraddha.ai.operator.CommandReferenceType
-import `in`.shraddha.ai.operator.CommandReferenceResolution
 import `in`.shraddha.ai.operator.learning.AppProfileStore
 import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
+import `in`.shraddha.ai.operator.CommandFollowUpContextRuntime
+import `in`.shraddha.ai.operator.CommandReferenceResolution
+import `in`.shraddha.ai.operator.CommandReferenceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -255,64 +255,56 @@ object ActionExecutor {
                 }
             }
             "open_app" -> {
-                val requestedApp = args.optString("app_name", "").trim()
-                val resolution = if (requestedApp.isNotBlank()) {
-                    CommandFollowUpContextRuntime.resolve(requestedApp, CommandReferenceType.APP)
-                } else CommandReferenceResolution.NoReferenceRequested
-                val appName = when (resolution) {
-                    is CommandReferenceResolution.Resolved -> resolution.reference.displayLabel
-                    else -> requestedApp
+                val appName = args.optString("app_name", "").trim()
+                val apps = InstalledAppLabelCache.get(context)
+                val resolution = CommandFollowUpContextRuntime.resolve(appName, CommandReferenceType.APP)
+                val priorAppReference = (resolution as? CommandReferenceResolution.Resolved)?.reference
+                val packageName = when (resolution) {
+                    is CommandReferenceResolution.Resolved -> {
+                        val remembered = resolution.reference
+                        // Revalidate the remembered app against the currently installed app list.
+                        AppLauncher.findApp(remembered.displayLabel, apps)
+                            ?.takeIf { it == remembered.stableId }
+                    }
+                    CommandReferenceResolution.NoReferenceRequested ->
+                        if (appName.isNotBlank()) AppLauncher.findApp(appName, apps) else null
+                    CommandReferenceResolution.MissingOrExpired,
+                    CommandReferenceResolution.TypeMismatch -> null
                 }
-                if (appName.isEmpty()) {
-                    result.put("status", "error")
-                    result.put("message", "App name cannot be empty")
+
+                if (packageName == null) {
+                    result.put("status", "needs_clarification")
+                    result.put("action", "app_reference_missing_or_unavailable")
+                    result.put("message", "कौन-सा app खोलना है? पिछले चयन की अवधि समाप्त हो गई है या वह app अब उपलब्ध नहीं है।")
                     return result
                 }
-
-                val apps = InstalledAppLabelCache.get(context)
-                // A remembered package is only reused if it is still installed; otherwise
-                // require a fresh label match instead of launching an old/stale package ID.
-                val packageName = when (resolution) {
-                    is CommandReferenceResolution.Resolved ->
-                        apps.values.firstOrNull { it == resolution.reference.stableId }
-                    else -> AppLauncher.findApp(appName, apps)
-                }
-
-                if (packageName != null) {
-                    val launched = AppLauncher.launch(context, packageName)
-                    if (launched) {
-                        CommandFollowUpContextRuntime.remember(CommandReferenceType.APP, packageName, appName)
-                        result.put("status", "success")
-                        result.put("action", "app_opened")
-                        result.put("package", packageName)
-                    } else {
-                        result.put("status", "error")
-                        result.put("action", "launch_failed")
-                    }
+                val launched = AppLauncher.launch(context, packageName)
+                if (launched) {
+                    CommandFollowUpContextRuntime.remember(
+                        CommandReferenceType.APP, packageName,
+                        priorAppReference?.displayLabel ?: appName.ifBlank { packageName }
+                    )
+                    result.put("status", "success")
+                    result.put("action", "app_opened")
+                    result.put("package", packageName)
                 } else {
                     result.put("status", "error")
-                    result.put("action", "app_not_found")
-                    result.put("query", appName)
+                    result.put("action", "launch_failed")
                 }
             }
 
             "call_contact" -> {
-                val requestedContact = args.optString("contact_name", "").trim()
-                val query = if (requestedContact in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
-                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContact, CommandReferenceType.CONTACT)) {
-                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
-                        else -> requestedContact
-                    }
-                } else requestedContact
-                if (query.isEmpty()) {
-                    result.put("status", "error")
-                    result.put("message", "Contact query is empty")
+                val query = args.optString("contact_name", "").trim()
+                val contactLookup = lookupContactWithFollowUp(context, query)
+                if (contactLookup == null) {
+                    result.put("status", "needs_clarification")
+                    result.put("action", "contact_reference_missing_or_expired")
+                    result.put("message", "किस व्यक्ति को कॉल करना है? पिछले contact का चयन उपलब्ध नहीं है; नाम दोबारा बताइए।")
                     return result
                 }
 
-                when (val lookup = ContactResolver.lookup(context, query)) {
+                when (val lookup = contactLookup) {
                     is ContactLookupResult.Found -> {
-                        CommandFollowUpContextRuntime.remember(CommandReferenceType.CONTACT, lookup.phoneNumber, lookup.displayName)
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
                         result.put("status", when (callStatus) { "call_started" -> "success"; "dialer_opened_no_permission" -> "needs_user_action"; else -> "error" })
                         result.put("action", callStatus)
@@ -344,13 +336,7 @@ object ActionExecutor {
             }
 
             "message_contact" -> {
-                val requestedContactName = args.optString("contact_name", "").trim()
-                val contactName = if (requestedContactName in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
-                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContactName, CommandReferenceType.CONTACT)) {
-                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
-                        else -> requestedContactName
-                    }
-                } else requestedContactName
+                val contactName = args.optString("contact_name", "").trim()
                 val messageText = args.optString("message", "").trim()
                 val targetApp = args.optString("app", "sms").lowercase().trim()
 
@@ -359,13 +345,19 @@ object ActionExecutor {
                     result.put("message", "Only SMS and WhatsApp are supported.")
                     return result
                 }
-                if (contactName.isEmpty() || messageText.isEmpty() || messageText.length > 4000) {
+                if (messageText.isEmpty() || messageText.length > 4000) {
                     result.put("status", "error")
-                    result.put("message", "Recipient and message body are required")
+                    result.put("message", "Message body is required")
                     return result
                 }
 
-                val lookup = ContactResolver.lookup(context, contactName)
+                val lookup = lookupContactWithFollowUp(context, contactName)
+                if (lookup == null) {
+                    result.put("status", "needs_clarification")
+                    result.put("action", "contact_reference_missing_or_expired")
+                    result.put("message", "किसे संदेश भेजना है? पिछला contact चयन उपलब्ध नहीं है; नाम दोबारा बताइए।")
+                    return result
+                }
                 val phoneNumber = when (lookup) {
                     is ContactLookupResult.Found -> lookup.phoneNumber
                     is ContactLookupResult.Ambiguous -> {
@@ -405,7 +397,6 @@ object ActionExecutor {
                     return result
                 }
                 if (openMessageReview(context, channel, phoneNumber, messageText)) {
-                    CommandFollowUpContextRuntime.remember(CommandReferenceType.CONTACT, phoneNumber, contactName)
                     result.put("status", "review_required").put("action", "message_review_opened")
                     result.put("recipient", phoneNumber)
                     result.put("message_preview", messageText)
@@ -804,5 +795,35 @@ object ActionExecutor {
                 if (continuation.isActive) continuation.resume(response)
             }
         }
+
+    /**
+     * Resolves a named or explicitly selected prior contact. A remembered contact is
+     * looked up again from the live Contacts provider and its number must still match.
+     */
+    private fun lookupContactWithFollowUp(context: Context, query: String): ContactLookupResult? {
+        return when (val resolution = CommandFollowUpContextRuntime.resolve(query, CommandReferenceType.CONTACT)) {
+            is CommandReferenceResolution.Resolved -> {
+                val reference = resolution.reference
+                when (val current = ContactResolver.lookup(context, reference.displayLabel)) {
+                    is ContactLookupResult.Found ->
+                        current.takeIf { it.phoneNumber == reference.stableId }
+                            ?: ContactLookupResult.NotFound
+                    else -> current
+                }
+            }
+            CommandReferenceResolution.NoReferenceRequested -> {
+                if (query.isBlank()) return ContactLookupResult.NotFound
+                ContactResolver.lookup(context, query).also { found ->
+                    if (found is ContactLookupResult.Found) {
+                        CommandFollowUpContextRuntime.remember(
+                            CommandReferenceType.CONTACT, found.phoneNumber, found.displayName
+                        )
+                    }
+                }
+            }
+            CommandReferenceResolution.MissingOrExpired,
+            CommandReferenceResolution.TypeMismatch -> null
+        }
+    }
 
 }
