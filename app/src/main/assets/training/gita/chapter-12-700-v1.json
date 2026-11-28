@@ -1,0 +1,230 @@
+{
+  "schema": "shraddha.gita.chapter.v1",
+  "chapter": 12,
+  "chapterVerseCount": 20,
+  "speakerCounts": {
+    "arjuna": 1,
+    "krishna": 19
+  },
+  "canonicalEdition": "700-verse numbering; chapter 13 excludes the separately attested Arjuna question used as 13.1 in some 701-verse editions",
+  "source": {
+    "repository": "gita/gita",
+    "file": "data/verse.json",
+    "license": "The Unlicense",
+    "url": "https://github.com/gita/gita/blob/main/data/verse.json"
+  },
+  "crossReference": {
+    "name": "Hansi Gita Bhawan Trust 700-verse corpus",
+    "url": "https://gitabhawan.org.in/gita/research",
+    "note": "Independent corpus reports the same traditional 700-verse chapter counts and speaker totals; byte-for-byte text comparison has not been claimed."
+  },
+  "fields": {
+    "sanskrit": "source transcription with speaker headings separated",
+    "speaker": "propagated from explicit speaker declarations in verse order; aggregate counts match the independent Trust count",
+    "transliteration": "source-provided transliteration with speaker line separated; not a phonetic guarantee",
+    "wordGloss": "source-provided English gloss; requires Sanskrit-scholar review"
+  },
+  "editionVariants": [],
+  "verses": [
+    {
+      "ref": "12.1",
+      "chapter": 12,
+      "verse": 1,
+      "sourceNumber": "12.1",
+      "speaker": "arjuna",
+      "sanskrit": "एवं सततयुक्ता ये भक्तास्त्वां पर्युपासते।\nयेचाप्यक्षरमव्यक्तं तेषां के योगवित्तमाः।।12.1।।",
+      "transliteration": "evaṁ satata-yuktā ye bhaktās tvāṁ paryupāsate\nye chāpy akṣharam avyaktaṁ teṣhāṁ ke yoga-vittamāḥ",
+      "wordGloss": "arjunaḥ uvācha—Arjun said; evam—thus; satata—steadfastly; yuktāḥ—devoted; ye—those; bhaktāḥ—devotees; tvām—you; paryupāsate—worship; ye—those; cha—and; api—also; akṣharam—the imperishable; avyaktam—the formless Brahman; teṣhām—of them; ke—who; yoga-vit-tamāḥ—more perfect in Yog"
+    },
+    {
+      "ref": "12.2",
+      "chapter": 12,
+      "verse": 2,
+      "sourceNumber": "12.2",
+      "speaker": "krishna",
+      "sanskrit": "मय्यावेश्य मनो ये मां नित्ययुक्ता उपासते।\nश्रद्धया परयोपेतास्ते मे युक्ततमा मताः।।12.2।।",
+      "transliteration": "mayy āveśhya mano ye māṁ nitya-yuktā upāsate\nśhraddhayā parayopetās te me yuktatamā matāḥ",
+      "wordGloss": "śhrī-bhagavān uvācha—the Blessed Lord said; mayi—on me; āveśhya—fix; manaḥ—the mind; ye—those; mām—me; nitya yuktāḥ—always engaged; upāsate—worship; śhraddhayā—with faith; parayā—best; upetāḥ—endowed; te—they; me—by me; yukta-tamāḥ—situated highest in Yog; matāḥ—I consider"
+    },
+    {
+      "ref": "12.3",
+      "chapter": 12,
+      "verse": 3,
+      "sourceNumber": "12.3",
+      "speaker": "krishna",
+      "sanskrit": "ये त्वक्षरमनिर्देश्यमव्यक्तं पर्युपासते।\nसर्वत्रगमचिन्त्यं च कूटस्थमचलं ध्रुवम्।।12.3।।",
+      "transliteration": "ye tv akṣharam anirdeśhyam avyaktaṁ paryupāsate\nsarvatra-gam achintyañcha kūṭa-stham achalandhruvam\n sanniyamyendriya-grāmaṁ sarvatra sama-buddhayaḥ\nte prāpnuvanti mām eva sarva-bhūta-hite ratāḥ",
+      "wordGloss": "ye—who; tu—but; akṣharam—the imperishable; anirdeśhyam—the indefinable; avyaktam—the unmanifest; paryupāsate—worship; sarvatra-gam—the all-pervading; achintyam—the unthinkable; cha—and; kūṭa-stham—the unchanging; achalam—the immovable; dhruvam—the eternal; \n sanniyamya—restraining; indriya-grāmam—the senses; sarvatra—everywhere; sama-buddhayaḥ—even-minded; te—they; prāpnuvanti—attain; mām—me; eva—also; sarva-bhūta-hite—in the welfare of all beings; ratāḥ—engaged"
+    },
+    {
+      "ref": "12.4",
+      "chapter": 12,
+      "verse": 4,
+      "sourceNumber": "12.4",
+      "speaker": "krishna",
+      "sanskrit": "संनियम्येन्द्रियग्रामं सर्वत्र समबुद्धयः।\nते प्राप्नुवन्ति मामेव सर्वभूतहिते रताः।।12.4।।",
+      "transliteration": "sanniyamyendriya-grāmaṁ  sarvatra    sama-buddhayaḥ  te  prāpnuvanti mām eva sarva-bhūta-hite    ratāḥ",
+      "wordGloss": "sanniyamya-controlling;    indriya-grāmam—all  the senses; sarvatra—everywhere;     sama-buddayaḥ—equally  disposed;   te-they;    prāpnuvanti—achieve;    mām—unto    Me; eva—certainly;  sarva-bhūtahite—all living  entities'   welfare;    ratāḥ—engaged."
+    },
+    {
+      "ref": "12.5",
+      "chapter": 12,
+      "verse": 5,
+      "sourceNumber": "12.5",
+      "speaker": "krishna",
+      "sanskrit": "क्लेशोऽधिकतरस्तेषामव्यक्तासक्तचेतसाम्।\n\nअव्यक्ता हि गतिर्दुःखं देहवद्भिरवाप्यते।।12.5।।",
+      "transliteration": "kleśho ’dhikataras teṣhām avyaktāsakta-chetasām\navyaktā hi gatir duḥkhaṁ dehavadbhir avāpyate",
+      "wordGloss": "kleśhaḥ—tribulations; adhika-taraḥ—full of; teṣhām—of those; avyakta—to the unmanifest; āsakta—attached; chetasām—whose minds; avyaktā—the unmanifest; hi—indeed; gatiḥ—path; duḥkham—exceeding difficulty; deha-vadbhiḥ—for the embodied; avāpyate—is reached"
+    },
+    {
+      "ref": "12.6",
+      "chapter": 12,
+      "verse": 6,
+      "sourceNumber": "12.6",
+      "speaker": "krishna",
+      "sanskrit": "ये तु सर्वाणि कर्माणि मयि संन्यस्य मत्पराः।\nअनन्येनैव योगेन मां ध्यायन्त उपासते।।12.6।।",
+      "transliteration": "ye tu sarvāṇi karmāṇi mayi sannyasya mat-paraḥ\nananyenaiva yogena māṁ dhyāyanta upāsate",
+      "wordGloss": "ye—who; tu—but; sarvāṇi—all; karmāṇi—actions; mayi—to me; sannyasya—dedicating; mat-paraḥ—regarding me as the Supreme goal; ananyena—exclusively; eva—certainly; yogena—with devotion; mām—me; dhyāyantaḥ—meditating; upāsate—worship;"
+    },
+    {
+      "ref": "12.7",
+      "chapter": 12,
+      "verse": 7,
+      "sourceNumber": "12.7",
+      "speaker": "krishna",
+      "sanskrit": "तेषामहं समुद्धर्ता मृत्युसंसारसागरात्।\nभवामि नचिरात्पार्थ मय्यावेशितचेतसाम्।।12.7।।",
+      "transliteration": "teṣhām ahaṁ samuddhartā mṛityu-saṁsāra-sāgarāt\nbhavāmi na chirāt pārtha mayy āveśhita-chetasām",
+      "wordGloss": "teṣhām—of those; aham—I; samuddhartā—the deliverer; mṛityu-saṁsāra-sāgarāt—from the ocean of birth and death; bhavāmi—(I) become; na—not; chirāt—after a long time; pārtha—Arjun, the son of Pritha; mayi—with me; āveśhita chetasām—of those whose consciousness is united"
+    },
+    {
+      "ref": "12.8",
+      "chapter": 12,
+      "verse": 8,
+      "sourceNumber": "12.8",
+      "speaker": "krishna",
+      "sanskrit": "मय्येव मन आधत्स्व मयि बुद्धिं निवेशय।\nनिवसिष्यसि मय्येव अत ऊर्ध्वं न संशयः।।12.8।।",
+      "transliteration": "mayy eva mana ādhatsva mayi buddhiṁ niveśhaya\nnivasiṣhyasi mayy eva ata ūrdhvaṁ na sanśhayaḥ",
+      "wordGloss": "mayi—on me; eva—alone; manaḥ—mind; ādhatsva—fix; mayi—on me; buddhim—intellect; niveśhaya—surrender; nivasiṣhyasi—you shall always live; mayi—in me; eva—alone; ataḥ ūrdhvam—thereafter; na—not; sanśhayaḥ—doubt"
+    },
+    {
+      "ref": "12.9",
+      "chapter": 12,
+      "verse": 9,
+      "sourceNumber": "12.9",
+      "speaker": "krishna",
+      "sanskrit": "अथ चित्तं समाधातुं न शक्नोषि मयि स्थिरम्।\nअभ्यासयोगेन ततो मामिच्छाप्तुं धनञ्जय।।12.9।।",
+      "transliteration": "atha chittaṁ samādhātuṁ na śhaknoṣhi mayi sthiram\nabhyāsa-yogena tato mām ichchhāptuṁ dhanañjaya",
+      "wordGloss": "atha—if; chittam—mind; samādhātum—to fix; na śhaknoṣhi—(you) are unable; mayi—on me; sthiram—steadily; abhyāsa-yogena—by uniting with God through repeated practice; tataḥ—then; mām—me; ichchhā—desire; āptum—to attain; dhanañjaya—Arjun, the conqueror of wealth"
+    },
+    {
+      "ref": "12.10",
+      "chapter": 12,
+      "verse": 10,
+      "sourceNumber": "12.10",
+      "speaker": "krishna",
+      "sanskrit": "अभ्यासेऽप्यसमर्थोऽसि मत्कर्मपरमो भव।\nमदर्थमपि कर्माणि कुर्वन् सिद्धिमवाप्स्यसि।।12.10।।",
+      "transliteration": "abhyāse ’py asamartho ’si mat-karma-paramo bhava\nmad-artham api karmāṇi kurvan siddhim avāpsyasi",
+      "wordGloss": "abhyāse—in practice; api—if; asamarthaḥ—unable; asi—you; mat-karma paramaḥ—devotedly work for me; bhava—be; mat-artham—for my sake; api—also; karmāṇi—work; kurvan—performing; siddhim—perfection; avāpsyasi—you shall achieve"
+    },
+    {
+      "ref": "12.11",
+      "chapter": 12,
+      "verse": 11,
+      "sourceNumber": "12.11",
+      "speaker": "krishna",
+      "sanskrit": "अथैतदप्यशक्तोऽसि कर्तुं मद्योगमाश्रितः।\nसर्वकर्मफलत्यागं ततः कुरु यतात्मवान्।।12.11।।",
+      "transliteration": "athaitad apy aśhakto ’si kartuṁ mad-yogam āśhritaḥ\nsarva-karma-phala-tyāgaṁ tataḥ kuru yatātmavān",
+      "wordGloss": "atha—if; etat—this; api—even; aśhaktaḥ—unable; asi—you are; kartum—to work; mad-yogam—with devotion to me; āśhritaḥ—taking refuge; sarva-karma—of all actions; phala-tyāgam—to renounce the fruits; tataḥ—then; kuru—do; yata-ātma-vān—be situated in the self"
+    },
+    {
+      "ref": "12.12",
+      "chapter": 12,
+      "verse": 12,
+      "sourceNumber": "12.12",
+      "speaker": "krishna",
+      "sanskrit": "श्रेयो हि ज्ञानमभ्यासाज्ज्ञानाद्ध्यानं विशिष्यते।\nध्यानात्कर्मफलत्यागस्त्यागाच्छान्तिरनन्तरम्।।12.12।।",
+      "transliteration": "śhreyo hi jñānam abhyāsāj jñānād dhyānaṁ viśhiṣhyate\ndhyānāt karma-phala-tyāgas tyāgāch chhāntir anantaram",
+      "wordGloss": "śhreyaḥ—better; hi—for; jñānam—knowledge; abhyāsāt—than (mechanical) practice; jñānāt—than knowledge; dhyānam—meditation; viśhiṣhyate—better; dhyānāt—than meditation; karma-phala-tyāgaḥ—renunciation of the fruits of actions; tyāgāt—renunciation; śhāntiḥ—peace; anantaram—immediately"
+    },
+    {
+      "ref": "12.13",
+      "chapter": 12,
+      "verse": 13,
+      "sourceNumber": "12.13",
+      "speaker": "krishna",
+      "sanskrit": "अद्वेष्टा सर्वभूतानां मैत्रः करुण एव च।\nनिर्ममो निरहङ्कारः समदुःखसुखः क्षमी।।12.13।।",
+      "transliteration": "adveṣhṭā sarva-bhūtānāṁ maitraḥ karuṇa eva cha\nnirmamo nirahankāraḥ sama-duḥkha-sukhaḥ kṣhamī",
+      "wordGloss": "adveṣhṭā—free from malice; sarva-bhūtānām—toward all living beings; maitraḥ—friendly; karuṇaḥ—compassionate; eva—indeed; cha—and; nirmamaḥ—free from attachment to possession; nirahankāraḥ—free from egoism; sama—equipoised; duḥkha—distress; sukhaḥ—happiness; kṣhamī—forgiving;"
+    },
+    {
+      "ref": "12.14",
+      "chapter": 12,
+      "verse": 14,
+      "sourceNumber": "12.14",
+      "speaker": "krishna",
+      "sanskrit": "सन्तुष्टः सततं योगी यतात्मा दृढनिश्चयः।\nमय्यर्पितमनोबुद्धिर्यो मद्भक्तः स मे प्रियः।।12.14।।",
+      "transliteration": "santuṣhṭaḥ satataṁ yogī yatātmā dṛiḍha-niśhchayaḥ\nmayy arpita-mano-buddhir yo mad-bhaktaḥ sa me priyaḥ",
+      "wordGloss": "santuṣhṭaḥ—contented; satatam—steadily; yogī—united in devotion; yata-ātmā—self-controlled; dṛiḍha-niśhchayaḥ—firm in conviction; mayi—to me; arpita—dedicated; manaḥ—mind; buddhiḥ—intellect; yaḥ—who; mat-bhaktaḥ—my devotees; saḥ—they; me—to me; priyaḥ—very dear"
+    },
+    {
+      "ref": "12.15",
+      "chapter": 12,
+      "verse": 15,
+      "sourceNumber": "12.15",
+      "speaker": "krishna",
+      "sanskrit": "यस्मान्नोद्विजते लोको लोकान्नोद्विजते च यः।\nहर्षामर्षभयोद्वेगैर्मुक्तो यः स च मे प्रियः।।12.15।।",
+      "transliteration": "yasmān nodvijate loko lokān nodvijate cha yaḥ\nharṣhāmarṣha-bhayodvegair mukto yaḥ sa cha me priyaḥ",
+      "wordGloss": "yasmāt—by whom; na—not; udvijate—are agitated; lokaḥ—people; lokāt—from people; na—not; udvijate—are disturbed; cha—and; yaḥ—who; harṣha—pleasure; amarṣha—pain; bhaya—fear; udvegaiḥ—anxiety; muktaḥ—freed; yaḥ—who; saḥ—they; cha—and; me—to me; priyaḥ—very dear"
+    },
+    {
+      "ref": "12.16",
+      "chapter": 12,
+      "verse": 16,
+      "sourceNumber": "12.16",
+      "speaker": "krishna",
+      "sanskrit": "अनपेक्षः शुचिर्दक्ष उदासीनो गतव्यथः।\nसर्वारम्भपरित्यागी यो मद्भक्तः स मे प्रियः।।12.16।।",
+      "transliteration": "anapekṣhaḥ śhuchir dakṣha udāsīno gata-vyathaḥ\nsarvārambha-parityāgī yo mad-bhaktaḥ sa me priyaḥ",
+      "wordGloss": "anapekṣhaḥ—indifferent to worldly gain; śhuchiḥ—pure; dakṣhaḥ—skillful; udāsīnaḥ—without cares; gata-vyathaḥ—untroubled; sarva-ārambha—of all undertakings; parityāgī—renouncer; saḥ—who; mat-bhaktaḥ—my devotee; saḥ—he; me—to ne; priyaḥ—very dear"
+    },
+    {
+      "ref": "12.17",
+      "chapter": 12,
+      "verse": 17,
+      "sourceNumber": "12.17",
+      "speaker": "krishna",
+      "sanskrit": "यो न हृष्यति न द्वेष्टि न शोचति न काङ्क्षति।\nशुभाशुभपरित्यागी भक्ितमान्यः स मे प्रियः।।12.17।।",
+      "transliteration": "yo na hṛiṣhyati na dveṣhṭi na śhochati na kāṅkṣhati\nśhubhāśhubha-parityāgī bhaktimān yaḥ sa me priyaḥ",
+      "wordGloss": "yaḥ—who; na—neither; hṛiṣhyati—rejoice; na—nor; dveṣhṭi—despair; na—neither; śhochati—lament; na—nor; kāṅkṣhati—hanker for gain; śhubha-aśhubha-parityāgī—who renounce both good and evil deeds; bhakti-mān—full of devotion; yaḥ—who; saḥ—that person; me—to me; priyaḥ—very dear"
+    },
+    {
+      "ref": "12.18",
+      "chapter": 12,
+      "verse": 18,
+      "sourceNumber": "12.18",
+      "speaker": "krishna",
+      "sanskrit": "समः शत्रौ च मित्रे च तथा मानापमानयोः।\nशीतोष्णसुखदुःखेषु समः सङ्गविवर्जितः।।12.18।।",
+      "transliteration": "samaḥ śhatrau cha mitre cha tathā mānāpamānayoḥ\nśhītoṣhṇa-sukha-duḥkheṣhu samaḥ saṅga-vivarjitaḥ",
+      "wordGloss": "samaḥ—alike; śhatrau—to a foe; cha—and; mitre—to a friend; cha tathā—as well as; māna-apamānayoḥ—in honor and dishonor; śhīta-uṣhṇa—in cold and heat; sukha-duḥkheṣhu—in joy and sorrow; samaḥ—equipoised; saṅga-vivarjitaḥ—free from all unfavorable association;"
+    },
+    {
+      "ref": "12.19",
+      "chapter": 12,
+      "verse": 19,
+      "sourceNumber": "12.19",
+      "speaker": "krishna",
+      "sanskrit": "तुल्यनिन्दास्तुतिर्मौनी सन्तुष्टो येनकेनचित्।\nअनिकेतः स्थिरमतिर्भक्ितमान्मे प्रियो नरः।।12.19।।",
+      "transliteration": "tulya-nindā-stutir maunī santuṣhṭo yena kenachit\naniketaḥ sthira-matir bhaktimān me priyo naraḥ",
+      "wordGloss": "tulya—alike; nindā-stutiḥ—reproach and praise; maunī—silent contemplation; santuṣhṭaḥ—contented; yena kenachit—with anything; aniketaḥ—without attachment to the place of residence; sthira—firmly fixed; matiḥ—intellect; bhakti-mān—full of devotion; me—to me; priyaḥ—very dear; naraḥ—a person"
+    },
+    {
+      "ref": "12.20",
+      "chapter": 12,
+      "verse": 20,
+      "sourceNumber": "12.20",
+      "speaker": "krishna",
+      "sanskrit": "ये तु धर्म्यामृतमिदं यथोक्तं पर्युपासते।\nश्रद्दधाना मत्परमा भक्तास्तेऽतीव मे प्रियाः।।12.20।।",
+      "transliteration": "ye tu dharmyāmṛitam idaṁ yathoktaṁ paryupāsate\nśhraddadhānā mat-paramā bhaktās te ’tīva me priyāḥ",
+      "wordGloss": "ye—who; tu—indeed; dharma—of wisdom; amṛitam—nectar; idam—this; yathā—as; uktam—declared; paryupāsate—exclusive devotion; śhraddadhānāḥ—with faith; mat-paramāḥ—intent on me as the supreme goal; bhaktāḥ—devotees; te—they; atīva—exceedingly; me—to me; priyāḥ—dear"
+    }
+  ]
+}

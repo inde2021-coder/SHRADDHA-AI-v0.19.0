@@ -200,3 +200,12 @@ The detailed curriculum specification is now maintained in `docs/SHRADDHA-CURRIC
 
 ## Authored lesson library update (2026-11-26)
 Five substantive curriculum files were added under `docs/curriculum/`: Baby Care 0–2, Kids Foundation 3–10, Abacus eight-level course, Core ten domains practical lessons, and all 18 Mind Activities. These include lesson objectives, examples, practice, answer keys/rubrics, safety constraints and source/review gates. They are content in GitHub documentation, not yet bundled or loaded by the Android app. See the curriculum catalogue for exact paths and remaining integration work.
+
+
+## Android curriculum delivery status (2026-11-28)
+
+- The Learning Library is reachable from Quick Actions and installs signed, versioned lesson packs into the existing encrypted knowledge store after per-asset SHA-256 verification.
+- The 18 Bhagavad Gita chapter assets are structurally checked for sequential verse entries and chapter counts. This is structural validation only; scholarly and independent corpus review remain pending.
+- The learning UI supports local chapter/lesson browsing, completed-verse/pack progress and offline knowledge retrieval.
+- Guardian Mode protects daily study time with an on-device salted PBKDF2 PIN, five-failure cooldown and AES-GCM encrypted progress. No child progress is synced by this feature.
+- The specialist review registry keeps every pack explicitly pending; authored content is not represented as expert-approved, medical advice or verified model training data.

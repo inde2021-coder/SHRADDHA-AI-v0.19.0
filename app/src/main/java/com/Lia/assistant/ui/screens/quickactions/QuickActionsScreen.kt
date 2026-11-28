@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +50,7 @@ import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import `in`.shraddha.ai.operator.OperatorActivity
+import `in`.shraddha.ai.learning.CurriculumLearningActivity
 
 private data class ActionItem(
     val title: String,
@@ -73,6 +75,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
             },
             ActionItem("संदेश लिखें", "टेक्स्ट में सवाल या निर्देश दें", Icons.AutoMirrored.Filled.Message) {
                 navController.navigate("chat")
+            },
+            ActionItem("सीखें", "गीता के 18 अध्याय, पाठ्यक्रम और सुरक्षित learning progress", Icons.Default.School) {
+                context.startActivity(android.content.Intent(context, CurriculumLearningActivity::class.java))
             },
             ActionItem("कैमरे से पूछें", "सामने की चीज़ को कैमरे से समझें", Icons.Default.CameraAlt) {
                 navController.navigate("visual_lens")
