@@ -44,6 +44,24 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "inspect_akkps_runner",
+                description = "Opens the dedicated AKKPS Runner workspace and automatically inspects the authenticated visible page after the user signs in. Only page structure is captured: module names, form counts, safe field labels, table headers and generic actions. It never captures form values, farmer rows, cookies, passwords or OTPs.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "get_akkps_runner_inventory",
+                description = "Returns the latest sanitized AKKPS Runner page inventory captured on this device. Use after inspect_akkps_runner and after the user has signed in. The result contains page structure only, not farmer records or field values.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "open_akkps_runner",
                 description = "Opens Shraddha AI's dedicated, allow-listed AKKPS Runner workspace. The user signs in directly inside the official HTTPS website; passwords and OTPs stay in the website and are never sent to the AI. Optionally pass the exact user-requested Runner command to load after login. The Runner maps only explicit user-provided values, asks for missing information, requires a separate confirmation before Submit, and verifies the server response and record ID.",
                 params = mapOf("command" to "Optional exact user-requested AKKPS Runner command, maximum 3000 characters. Never include passwords, OTPs, PINs or CAPTCHA answers."),
