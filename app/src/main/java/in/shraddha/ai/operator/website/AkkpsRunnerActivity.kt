@@ -44,6 +44,10 @@ class AkkpsRunnerActivity : Activity() {
     private var pendingBoundaryUploadUri: Uri? = null
     private var pendingBoundaryUploadPlotId: String? = null
     private var pendingBoundaryUploadPreparedAt = 0L
+    private var pendingBoundaryReopenRecordId: String? = null
+    private var pendingBoundaryReopenPlotId: String? = null
+    private var pendingBoundaryReopenUrl: String? = null
+    private var pendingBoundaryReopenAfterLoad = false
     private var pendingAwdRepeaterSection: String? = null
     private var pendingAwdRepeaterUrl: String? = null
     private var pendingAwdRepeaterBaseline = -1
@@ -235,6 +239,7 @@ class AkkpsRunnerActivity : Activity() {
         liveMapActions.addView(action("Live Map Draw") { activateLiveMapTool("draw") }, LinearLayout.LayoutParams(0, dp(40), 1f))
         liveMapActions.addView(action("Live Map Edit") { activateLiveMapTool("edit") }, LinearLayout.LayoutParams(0, dp(40), 1f))
         liveMapActions.addView(action("Inspect Live Map") { inspectLiveMap() }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        liveMapActions.addView(action("AKKPS Map Reopen") { reopenLiveBoundaryMap() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(liveMapActions)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
@@ -280,6 +285,9 @@ class AkkpsRunnerActivity : Activity() {
                     if (AkkpsWebsiteProfile.allowsRunnerNavigation(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
                         installSubmitObserver()
+                        if (pendingBoundaryReopenAfterLoad) {
+                            web.postDelayed({ verifyReopenedBoundaryMap(url) }, 900)
+                        }
                         dispatchPendingAiCommand(url)
                         dispatchPendingInspect(url)
                     }
@@ -1191,15 +1199,86 @@ class AkkpsRunnerActivity : Activity() {
                 pendingBoundaryUploadPreparedAt = 0L
                 pendingBoundaryUploadPlotId = null
                 val recordId = result.optString("recordId")
-                status.text = "AKKPS boundary write response verified • Record ID: $recordId • अब Plot map Reopen करके polygon दिखना जाँचें।"
+                pendingBoundaryReopenRecordId = recordId
+                pendingBoundaryReopenPlotId = currentPlotId
+                pendingBoundaryReopenUrl = web.url.orEmpty()
+                pendingBoundaryReopenAfterLoad = false
+                status.text = "AKKPS boundary write response verified • Record ID: $recordId • अब AKKPS Map Reopen दबाकर reload के बाद जाँचें।"
                 AlertDialog.Builder(this)
                     .setTitle("Boundary server response verified")
-                    .setMessage("AKKPS ने 2xx success response और Record ID $recordId दिया। यह server response का प्रमाण है; अब Plot का map दोबारा खोलकर polygon की दृश्य पुष्टि करें।")
+                    .setMessage("AKKPS ने 2xx success response और Record ID $recordId दिया। अब AKKPS Map Reopen दबाएँ; पेज reload होगा और map/layer evidence दोबारा जाँचा जाएगा।")
                     .setPositiveButton("ठीक है", null)
                     .show()
             } else {
                 status.text = "इस session में boundary upload का 2xx success + Record ID नहीं मिला। परिणाम uncertain है; दोबारा upload करने से पहले Plot map/list जाँचें।"
             }
+        }
+    }
+
+    /** Reload the authenticated AKKPS Plot page after a verified boundary write. */
+    private fun reopenLiveBoundaryMap() {
+        val recordId = pendingBoundaryReopenRecordId
+        val plotId = pendingBoundaryReopenPlotId
+        val targetUrl = pendingBoundaryReopenUrl
+        if (recordId.isNullOrBlank() || plotId.isNullOrBlank() || targetUrl.isNullOrBlank()) {
+            status.text = "पहले AKKPS boundary write का success response और Record ID verify होना जरूरी है।"
+            return
+        }
+        if (!AkkpsWebsiteProfile.acceptsUrl(targetUrl) || !plotRouteMatches(plotId) ||
+            AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            status.text = "वही authenticated AKKPS Plot page खोलें; दूसरे Plot पर reopen verification नहीं चलेगा।"
+            return
+        }
+        pendingBoundaryReopenAfterLoad = true
+        status.text = "AKKPS Plot map reload हो रहा है… Record ID $recordId"
+        web.reload()
+    }
+
+    /** Reports only post-reload map/layer evidence; it never equates a vector hint with polygon identity. */
+    private fun verifyReopenedBoundaryMap(loadedUrl: String) {
+        val recordId = pendingBoundaryReopenRecordId ?: return
+        val plotId = pendingBoundaryReopenPlotId ?: return
+        if (!pendingBoundaryReopenAfterLoad || loadedUrl != pendingBoundaryReopenUrl ||
+            !plotRouteMatches(plotId) || AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            pendingBoundaryReopenAfterLoad = false
+            status.text = "AKKPS Plot page अपेक्षित route पर reopen नहीं हुआ; boundary persistence अभी verify नहीं है।"
+            return
+        }
+        val script = """
+            (() => {
+              const visible=e=>!!(e && e.getClientRects().length &&
+                getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden');
+              const selector='.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,'+
+                '[data-testid*="map" i],[role=application][aria-label*=map i],[aria-label*=map i]';
+              const candidates=[...document.querySelectorAll(selector)].filter(visible);
+              const engines=candidates.filter(e=>e.classList.contains('leaflet-container') ||
+                e.classList.contains('mapboxgl-map') || e.classList.contains('ol-viewport') ||
+                e.classList.contains('gm-style'));
+              const preferred=engines.length?engines:candidates;
+              const roots=preferred.filter(e=>!preferred.some(other=>other!==e && other.contains(e)));
+              const layerSelectors=['.leaflet-overlay-pane svg path','.ol-overlaycontainer svg path',
+                '[data-layer-type*="polygon" i]','[data-geometry-type="polygon" i]'];
+              const layerHints=layerSelectors.reduce((sum,sel)=>sum+
+                [...document.querySelectorAll(sel)].filter(visible).length,0);
+              return JSON.stringify({mapCount:roots.length,layerHints,route:location.pathname});
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(script) { raw ->
+            pendingBoundaryReopenAfterLoad = false
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            val mapCount = result?.optInt("mapCount", -1) ?: -1
+            val layerHints = result?.optInt("layerHints", 0) ?: 0
+            val sameRecord = pendingBoundaryReopenRecordId == recordId && pendingBoundaryReopenPlotId == plotId
+            if (sameRecord && mapCount == 1 && layerHints > 0) {
+                status.text = "AKKPS page reload हुआ और एक map में $layerHints visible vector-layer hints मिले • Plot $plotId • Record $recordId। यह map/layer evidence है, exact polygon identity या server persistence का स्वतंत्र प्रमाण नहीं।"
+            } else {
+                status.text = "AKKPS page reload हुआ, लेकिन unique map/vector-layer evidence पूरा नहीं मिला (maps=$mapCount, hints=$layerHints)। Boundary persistence अभी uncertain है; दोबारा upload न करें।"
+            }
+            AlertDialog.Builder(this)
+                .setTitle("AKKPS Map Reopen निरीक्षण")
+                .setMessage(status.text.toString())
+                .setPositiveButton("ठीक है", null)
+                .show()
         }
     }
 
@@ -2534,6 +2613,10 @@ Return exact JSON only. Do not include prose or markdown."""
         pendingBoundaryUploadUri = null
         pendingBoundaryUploadPlotId = null
         pendingBoundaryUploadPreparedAt = 0L
+        pendingBoundaryReopenRecordId = null
+        pendingBoundaryReopenPlotId = null
+        pendingBoundaryReopenUrl = null
+        pendingBoundaryReopenAfterLoad = false
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
