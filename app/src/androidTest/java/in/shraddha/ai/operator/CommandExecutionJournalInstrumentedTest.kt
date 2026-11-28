@@ -76,18 +76,21 @@ class CommandExecutionJournalInstrumentedTest {
         var blocked = false
         try {
             restarted.createPlan("new command", listOf(CommandTaskStep("step-2", "files", "upload")))
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
+            // Authenticated-store decoding can reject a malformed payload with
+            // IllegalArgumentException before the journal wraps it as a state error.
             blocked = true
         }
         assertTrue("Corrupted durable state must not be treated as an empty journal.", blocked)
     }
 
     @Test fun storagePruningNeverEvictsAnUnresolvedPlan() {
+        // Pending plans are durable but do not yet block new work. Fill/prune history
+        // first, then mark the protected plan RUNNING to model an in-flight side effect.
         val active = requireNotNull(journal.createPlan(
             "critical action one",
             listOf(CommandTaskStep("critical-step", "messaging", "send"))
         ))
-        assertEquals(CommandStepState.RUNNING, requireNotNull(journal.markRunning(active.id, "critical-step")).state)
 
         for (index in 1..105) {
             val completed = requireNotNull(journal.createPlan(
@@ -99,6 +102,7 @@ class CommandExecutionJournalInstrumentedTest {
                 requireNotNull(journal.finish(completed.id, "step-$index", CommandStepState.SUCCEEDED, "done")).state)
         }
 
+        assertEquals(CommandStepState.RUNNING, requireNotNull(journal.markRunning(active.id, "critical-step")).state)
         val restarted = CommandExecutionJournal(context)
         assertNotNull("Unresolved plan must survive history pruning.", restarted.get(active.id))
         assertTrue(restarted.recoverInterruptedSteps())
