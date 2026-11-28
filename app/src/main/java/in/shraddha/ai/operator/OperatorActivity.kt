@@ -656,7 +656,7 @@ Rules:
 - SCROLL_BACKWARD may be used only when the visible page is scrollable; it is re-observed after dispatch.
 - Prefer a short sequence (maximum 8 steps). The executor re-observes the screen and re-resolves each target before dispatch.
 - Include expectedVisibleText for meaningful state changes. For a Like action use the resulting Unlike/Unlike button state; for a follow action use Following; for a comment use the exact comment; for a message send use the exact message body.
-- Never send, publish, delete, pay, purchase, or submit unless the user explicitly requested that exact side effect.
+- Never send, share, comment, follow/unfollow, publish, delete, pay, purchase, or submit unless the user explicitly requested that exact side effect. Share/comment/follow, destructive, payment and publish/submit actions must pass the runtime step-specific confirmation gate; a clear single-recipient Send may execute without a second confirmation only after exact recipient + exact message verification.
 - A Send step is allowed only when the command explicitly says send, the exact recipient is explicitly named and selected in a prior CLICK_TEXT step, the exact message is typed in a prior TYPE_TEXT step, and the final target is the exact visible Send button. Set expectedVisibleText to the exact message body. No mass messaging.
 - If the task cannot be performed with the listed actions or visible evidence, return {"steps":[]} rather than guessing."""
         val prompt = "User command:\n" + command.take(3000) +
