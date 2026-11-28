@@ -128,9 +128,7 @@ object MultiProviderChatClient {
                 }
                 if (parsedResult is ChatReplyResult.Success) {
                     if (tokenUsage == null) {
-                        `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, selected, cfg.model.ifBlank { null })
                     } else {
-                        `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, tokenUsage)
                     }
                 }
                 parsedResult
