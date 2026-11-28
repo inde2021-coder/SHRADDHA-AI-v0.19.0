@@ -46,6 +46,10 @@ class AkkpsRunnerPageWorkflowPolicyTest {
             AkkpsRunnerPageWorkflowPolicy.autocompleteRequest("select village Rampur")
         )
         assertEquals(
+            AkkpsAutocompleteRequest("Village", "Rampur"),
+            AkkpsRunnerPageWorkflowPolicy.autocompleteRequest("Rampur गाँव चुनें")
+        )
+        assertEquals(
             AkkpsAutocompleteRequest("Rice Variety", "Swarna"),
             AkkpsRunnerPageWorkflowPolicy.autocompleteRequest("choose rice variety Swarna")
         )
