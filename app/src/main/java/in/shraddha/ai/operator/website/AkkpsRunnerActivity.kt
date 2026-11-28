@@ -127,7 +127,7 @@ class AkkpsRunnerActivity : Activity() {
         val inspectRequested = intent.getBooleanExtra(EXTRA_RUNNER_INSPECT, false)
         intent.removeExtra(EXTRA_RUNNER_COMMAND)
         intent.removeExtra(EXTRA_RUNNER_INSPECT)
-        if (submitVerificationPending || submitNeedsManualReview || submitConfirmationPending || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress) {
+        if (submitVerificationPending || submitNeedsManualReview || submitConfirmationPending || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress || pendingInspectOnLoad) {
             status.text = "पिछला AKKPS command/Submit अभी पूरा नहीं हुआ। नया command नहीं चलाया गया।"
             return
         }
