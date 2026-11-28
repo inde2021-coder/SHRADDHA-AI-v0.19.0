@@ -111,6 +111,19 @@ class CommandExecutionJournalInstrumentedTest {
         assertFalse(CommandExecutionJournal(context).recoverInterruptedSteps())
     }
 
+    @Test fun fullyBlockedActionCanBeRetriedAfterUserFixesTheBlocker() {
+        val first = requireNotNull(plan())
+        assertNotNull(journal.markRunning(first.id, "step-1"))
+        assertEquals(
+            CommandStepState.BLOCKED,
+            requireNotNull(journal.finish(first.id, "step-1", CommandStepState.BLOCKED, "permission_required")).state
+        )
+
+        val retry = requireNotNull(plan())
+        assertNotEquals("A blocked action with no side effect must be retryable.", first.id, retry.id)
+        assertEquals(CommandStepState.PENDING, retry.steps.single().state)
+    }
+
     @Test fun deduplicationDoesNotReuseAPlanWithDifferentActions() {
         val first = requireNotNull(plan())
         val incompatible = journal.createPlan(
