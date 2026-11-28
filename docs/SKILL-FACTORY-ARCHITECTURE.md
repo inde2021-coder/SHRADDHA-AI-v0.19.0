@@ -166,3 +166,22 @@ Moving durable memory and large content packs off-device can reduce installed AP
 
 ## Authored curriculum content delivery
 Five lesson libraries have been authored under `docs/curriculum/` and indexed in `SHRADDHA-CURRICULUM-CATALOG.md`. They are not yet installed in the Android knowledge store. Ingestion must reuse `LocalKnowledgeDocumentStore` and `LocalKnowledgeBase`, preserve pack provenance/licence/version, and add retrieval tests. Do not create a parallel RAG store. Baby-care and health-related content requires specialist review before being exposed as advice. The Skill Factory must keep these packs in review/quarantine until trust, licence, safety and validation gates pass.
+
+## Android lifecycle implementation update (2026-11-27)
+
+`SkillPackLifecycleManager.kt` now provides:
+- HTTPS-only pack download with exact publisher-host matching, redirect rejection, bounded size and SHA-256 verification.
+- RSA/SHA-256 signed-manifest verification against a publisher-key map supplied by a trusted app-owned caller.
+- Quarantine storage and strict text-only Markdown/plain-text/JSON acceptance. Archives, executable payloads and binary packs are not executed or installed.
+- Explicit user-import consent, human review, safety/factual/regression/duplicate gates, versioned activation and rollback to the previous active version.
+- Fail-closed activation-state parsing; corrupted activation state is not silently reset.
+
+**Important trust-anchor limitation:** this repository does not yet ship a verified publisher public keyring. Therefore the download API must not be exposed with caller-controlled or user-supplied trust keys; official remote downloads remain unavailable until a publisher key is independently verified and pinned in an app release. User imports remain quarantined until explicit review. The lifecycle manager is not yet wired to a public Skill Factory marketplace UI or automatic discovery worker.
+
+`SkillDomainCatalog.kt` lists the 20 planned learning domains and explicitly distinguishes existing source documents from catalogue-only domains. A catalogue row is not a completed, verified or installed knowledge pack.
+
+## AKKPS Farmer Card OCR
+
+The AKKPS Runner now has a local image-picker OCR entry point using on-device Latin and Devanagari ML Kit recognizers. `AkkpsFarmerCardOcrParser.kt` only extracts explicit labelled pairs for name, farmer ID, village, block, district and state; it does not infer values or extract Aadhaar/OTP/password fields. OCR text is not uploaded to a cloud AI endpoint or persisted. Candidate assignments are placed in the Runner command box for the user to review and correct; missing core fields are listed and no submit is triggered by OCR. The existing explicit submit/confirmation workflow remains separate.
+
+Calls, SMS and WhatsApp remain routed through their existing per-recipient/per-message approval and replay-protection components; this PR does not bypass those controls.
