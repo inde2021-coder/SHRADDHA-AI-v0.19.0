@@ -302,7 +302,7 @@ class AkkpsRunnerActivity : Activity() {
      * stops at the existing explicit confirmation dialog and server-ID verification.
      */
     private fun dispatchPendingInspect(url: String) {
-        if (!pendingInspectOnLoad || AkkpsRunnerRouteCatalog.match(url) == null) return
+        if (!pendingInspectOnLoad || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress || submitConfirmationPending || submitVerificationPending || AkkpsRunnerRouteCatalog.match(url) == null) return
         pendingInspectOnLoad = false
         inspectPage()
     }
