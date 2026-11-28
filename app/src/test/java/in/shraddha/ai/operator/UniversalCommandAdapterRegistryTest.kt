@@ -41,4 +41,17 @@ class UniversalCommandAdapterRegistryTest {
         registry.register(FakeAdapter("android_test", setOf(OperatorActionType.OPEN_APP), true))
         assertFalse(registry.execute(OperatorStep(OperatorActionType.TYPE_TEXT, target = "Message", value = "Hi"), false))
     }
+    @Test fun androidAdapterExecutesThroughTheRegisteredCallback() {
+        var observed = ""
+        val registry = UniversalCommandAdapterRegistry()
+        registry.register(AndroidAccessibilityCommandAdapter { step, confirmed ->
+            observed = "${step.action}:${step.target}:$confirmed"
+            true
+        })
+        assertTrue(registry.execute(OperatorStep(OperatorActionType.SELECT_FILE, target = "report.pdf"), true))
+        assertEquals("SELECT_FILE:report.pdf:true", observed)
+        assertEquals(1, registry.capabilities().size)
+        assertTrue(OperatorActionType.SCROLL_BACKWARD in registry.capabilities().single().actions)
+    }
+
 }
