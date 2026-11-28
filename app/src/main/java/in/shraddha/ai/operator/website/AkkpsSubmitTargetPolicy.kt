@@ -8,7 +8,7 @@ internal object AkkpsSubmitTargetPolicy {
     private fun normalize(value: String): String =
         Normalizer.normalize(value, Normalizer.Form.NFKC)
             .trim().lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\s+"), " ").trim()
 
     fun hasValidKeys(keys: List<String>): Boolean {
         val normalized = keys.map(::normalize)
