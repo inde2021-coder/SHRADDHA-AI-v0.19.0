@@ -47,7 +47,13 @@ class CommandExecutionJournal(context: Context) {
         if (steps.any { !validStep(it) } || steps.map { it.id }.distinct().size != steps.size) return null
         val fingerprint = sha256(command.trim())
         val now = System.currentTimeMillis()
-        val existing = loadAll().firstOrNull {
+        val storedPlans = loadAll()
+        // Do not start a new external action while any earlier side effect is unresolved.
+        // Different wording must not bypass an UNCERTAIN send/submit after a crash.
+        if (storedPlans.any { plan -> plan.steps.any {
+                it.state == CommandStepState.RUNNING || it.state == CommandStepState.UNCERTAIN
+            } }) return null
+        val existing = storedPlans.firstOrNull {
             val age = now - it.createdAt
             it.commandFingerprint == fingerprint && age in 0..DEDUP_WINDOW_MS
         }
@@ -70,6 +76,11 @@ class CommandExecutionJournal(context: Context) {
 
     @Synchronized
     fun get(planId: String): CommandTaskPlan? = loadAll().firstOrNull { it.id == planId }
+
+    @Synchronized
+    fun hasUnresolvedSideEffects(): Boolean = loadAll().any { plan ->
+        plan.steps.any { it.state == CommandStepState.RUNNING || it.state == CommandStepState.UNCERTAIN }
+    }
 
     @Synchronized
     fun recoverablePlans(): List<CommandTaskPlan> = loadAll().filter { plan ->
