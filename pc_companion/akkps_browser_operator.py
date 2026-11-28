@@ -730,8 +730,8 @@ class AkkpsBrowserOperator:
         signature = path.read_bytes()[:16]
         valid_signature = (
             (path.suffix.casefold() == ".pdf" and signature.startswith(b"%PDF-")) or
-            (path.suffix.casefold() in {".jpg", ".jpeg"} and signature.startswith(b"\\xff\\xd8\\xff")) or
-            (path.suffix.casefold() == ".png" and signature.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+            (path.suffix.casefold() in {".jpg", ".jpeg"} and signature.startswith(b"\xff\xd8\xff")) or
+            (path.suffix.casefold() == ".png" and signature.startswith(b"\x89PNG\r\n\x1a\n"))
         )
         if not valid_signature:
             raise ValueError("Document contents do not match the selected PDF/JPEG/PNG extension.")
