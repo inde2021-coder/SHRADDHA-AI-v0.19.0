@@ -285,7 +285,8 @@ class AkkpsBrowserOperator:
         visible_forms = self.page.locator("form:visible")
         if visible_forms.count() != 1:
             raise RuntimeError(f"Expected exactly one visible form; found {visible_forms.count()}.")
-        matches = self.page.get_by_label(label, exact=True)
+        form = visible_forms.first
+        matches = form.get_by_label(label, exact=True)
         count = matches.count()
         if count == 0:
             # Inventory labels may fall back to placeholder or the DOM name/id
@@ -293,7 +294,7 @@ class AkkpsBrowserOperator:
             matches = self.page.get_by_placeholder(label, exact=True)
             count = matches.count()
         if count == 0:
-            all_fields = self.page.locator("input,select,textarea")
+            all_fields = form.locator("input,select,textarea")
             indices = all_fields.evaluate_all(
                 "(elements, exact) => elements.map((e, i) => ({i, match: e.name === exact || e.id === exact || e.placeholder === exact}))"
                 ".filter(x => x.match).map(x => x.i)",
