@@ -47,6 +47,9 @@ class AkkpsCommandTests(unittest.TestCase):
         self.assertEqual(parse_android_command("open AKKPS Farmers"), {"kind": "akkps_module", "module": "farmers"})
         self.assertEqual(parse_android_command("open AKKPS Plots"), {"kind": "akkps_module", "module": "plots"})
         self.assertEqual(parse_android_command("AKKPS किसान खोलो"), {"kind": "akkps_module", "module": "farmers"})
+        self.assertEqual(parse_android_command("open AKKPS AWD Reports"), {"kind": "akkps_module", "module": "awd reports"})
+        self.assertEqual(parse_android_command("open AKKPS Profile"), {"kind": "akkps_module", "module": "profile"})
+        self.assertEqual(parse_android_command("open AKKPS Data Sync"), {"kind": "akkps_module", "module": "data sync"})
 
 
 if __name__ == "__main__":
