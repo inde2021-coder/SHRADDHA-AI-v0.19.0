@@ -45,6 +45,19 @@ On Android, the existing Runner workspace supports KML import/export, GeoJSON sa
 
 **Important:** Android boundary Save still means encrypted local save, not an AKKPS server update. KML/GeoJSON import and the new KML file-picker handoff do not prove that the AKKPS map overlay has changed. The live portal's Draw/Edit/Save adapter remains disabled because the authorized Runner map's actual map engine, layer model, save endpoint and server postcondition have not yet been verified in a signed-in session. Do not report a boundary as uploaded or saved on the portal until that live workflow is confirmed. Existing portal polygons must be preserved; overlap checks and portal Save→Reopen remain required before enabling direct drawing/saving.
 
+## Android voice-command examples
+
+- `set plot id PLOT-101`
+- `add drying event`, `add re-flooding date`, `add fertilizer row`, `add field visit`, `add historical yield`, `add water level reading`
+- After a row is verified: speak exact `Field Label = value` assignments for that newest row
+- `select village Rampur`, `choose rice variety Swarna`, `select farmer Ravi Kumar`, `choose plot PLOT-101`
+- `attach field photo`, `attach farmer photo`, `attach Aadhaar`, `attach land deed`, `attach agreement`, `attach signature`
+- `inspect live map`, `import satellite candidate`, `start gps walk`, `stop gps walk`
+- `save local boundary`, `reopen saved boundary`, `import boundary kml`, `export boundary kml`
+- `prepare boundary for AKKPS upload`, then open the portal's KML file field and confirm the prepared file; after using the portal's own Upload/Save control, say `verify boundary upload`
+
+A file-picker request or local KML preparation is not a portal upload. Exact labels/options must exist on the current visible page; otherwise the action stops without guessing.
+
 ## Main Brain data-entry sequence
 
 1. Call `inspect_akkps_runner`; the user signs in if prompted.
