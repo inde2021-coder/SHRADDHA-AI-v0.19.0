@@ -881,6 +881,9 @@ class AkkpsRunnerActivity : Activity() {
         if (raw.isBlank() || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
+        if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
+            status.text = "Password, OTP, PIN या CAPTCHA को command में न लिखें। वेबसाइट के login/form में स्वयं दर्ज करें।"; return
+        }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
