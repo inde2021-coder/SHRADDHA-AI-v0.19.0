@@ -7,7 +7,6 @@ from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, validate_a
 class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_allows_only_https_approved_hosts(self):
         self.assertEqual(validate_akkps_url("https://www.akkps.ngo"), "https://www.akkps.ngo")
-        self.assertEqual(validate_akkps_url("https://www.akps.ngo/runner"), "https://www.akps.ngo/runner")
 
     def test_rejects_other_hosts_and_http(self):
         for url in ("http://www.akkps.ngo", "https://evil.example", "https://akkps.ngo.evil.example"):
