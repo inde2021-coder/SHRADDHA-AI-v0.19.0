@@ -210,7 +210,7 @@ class AkkpsBrowserOperator:
             .filter(visible).map(e => ({
               label: labelFor(e), name: clean(e.name || e.id),
               type: clean(e.type || e.tagName.toLowerCase()).toLowerCase(),
-              required: !!e.required, disabled: !!e.disabled,
+              required: !!e.required, disabled: !!e.disabled, readOnly: !!e.readOnly,
               options: e.tagName === 'SELECT' ? [...e.options].map(o => clean(o.label || o.textContent)).filter(Boolean).slice(0, 80) : []
             }));
           const links = [...document.querySelectorAll('nav a, header a, aside a, [role=navigation] a')]
