@@ -1129,7 +1129,7 @@ class AkkpsRunnerActivity : Activity() {
         }
         val effectiveValues = values + rememberedValues.distinctBy { AkkpsLocalCommonFieldMemory.normalize(it.first) }
         val payload = JSONArray()
-        effectiveValues.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
+        effectiveValues.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second).put("booleanValue", AkkpsRunnerFieldPolicy.parseExplicitBoolean(it.second) ?: JSONObject.NULL)) }
         val js = """
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -1146,6 +1146,8 @@ class AkkpsRunnerActivity : Activity() {
               const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
                 getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const checkboxEditable=e=>e.type==='checkbox'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&visible(e.closest('label')||e.parentElement||e);
               const radioGroups=scope=>{
                 const groups=[];
                 for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
@@ -1168,6 +1170,22 @@ class AkkpsRunnerActivity : Activity() {
                     .map(norm).some(v=>v && v===key);
                 });
                 if(found.length===0){
+                  const checkboxMatches=all.filter(e=>{
+                    if(!checkboxEditable(e)) return false;
+                    const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
+                    return [e.name,e.id,e.getAttribute('aria-label'),...ls].map(norm).some(v=>v && v===key);
+                  });
+                  if(checkboxMatches.length>0){
+                    if(checkboxMatches.length!==1||item.booleanValue===null){
+                      out.push({key:item.key,status:checkboxMatches.length!==1?'ambiguous':'explicit_yes_no_required'});continue;
+                    }
+                    const checkbox=checkboxMatches[0];
+                    if(used.has(checkbox)){out.push({key:item.key,status:'duplicate_target'});continue;}
+                    checkbox.checked=item.booleanValue===true; used.add(checkbox);
+                    checkbox.dispatchEvent(new Event('input',{bubbles:true}));
+                    checkbox.dispatchEvent(new Event('change',{bubbles:true}));
+                    out.push({key:item.key,status:'filled'}); continue;
+                  }
                   const groups=radioGroups(form).filter(g=>{
                     const labels=groupLabel(g);
                     return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
