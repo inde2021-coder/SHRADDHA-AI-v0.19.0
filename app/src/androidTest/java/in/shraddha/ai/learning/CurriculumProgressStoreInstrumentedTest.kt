@@ -25,6 +25,24 @@ class CurriculumProgressStoreInstrumentedTest {
         store.endSession()
     }
 
+    @Test fun recoveredCommitDoesNotDoubleCountWhenProcessDiesBeforeMarkerClear() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        store.endSession()
+        val before = store.snapshot().usedTodayMinutes
+        store.startSession()
+        Thread.sleep(1_100L)
+
+        // Simulate a crash after encrypted usage was committed but before the recovery marker cleared.
+        store.endSessionAt(System.currentTimeMillis(), clearSessionMarker = false)
+        val restarted = CurriculumProgressStore(context)
+        restarted.endSession()
+        val afterRecovery = restarted.snapshot().usedTodayMinutes
+
+        assertTrue("The recovered session must be counted.", afterRecovery >= before + 1)
+        assertTrue("The recovered session must not be counted twice.", afterRecovery <= before + 1)
+    }
+
     @Test fun guardianPinRateLimitsRepeatedFailuresAndUnlocksAfterCooldown() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
