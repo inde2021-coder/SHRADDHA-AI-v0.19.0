@@ -15,3 +15,4 @@ comtypes==1.4.10
 pywinauto==0.6.9
 pygetwindow==0.0.9
 pytesseract==0.3.13
+playwright==1.55.0
