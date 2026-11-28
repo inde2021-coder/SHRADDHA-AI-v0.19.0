@@ -76,7 +76,6 @@ object AkkpsFieldAliasCatalog {
         "straw quantity tons acre" to "strawQuantityTonsPerAcre",
         "straw incorporation date" to "strawIncorporationDate",
         "organic straw notes" to "organicStrawNotes",
-        "urea npk" to "ureaNpk", "fertilizer application dates" to "fertilizerApplicationDates",
         "other fertilizers name" to "otherFertilizerName", "other fertilizer name" to "otherFertilizerName",
         "other fertilizers quantity kg acre" to "otherFertilizerQuantity",
         "other fertilizers applications" to "otherFertilizerApplications",
@@ -84,10 +83,7 @@ object AkkpsFieldAliasCatalog {
         "irrigation decision maker s gender" to "irrigationDecisionMakerGender",
         "irrigation decision makers gender" to "irrigationDecisionMakerGender",
         "water source shared with other farmers" to "waterSourceShared",
-        "pumping hours season" to "pumpingHoursPerSeason", "electricity kwh" to "electricityKwh",
         "farmer adoption confirmed" to "farmerAdoptionConfirmed",
-        "sensor iot reference" to "sensorIotReference", "field photos" to "fieldPhotos",
-        "field visits audit logs" to "fieldVisitsAuditLogs", "visit date" to "visitDate",
         "verifier notes" to "verifierNotes",
         "cultivation cost inr" to "cultivationCostInr", "water saved percent" to "waterSaved",
         "other gender laborers" to "otherGenderLaborers", "total laborers" to "totalLaborers",
@@ -105,15 +101,9 @@ object AkkpsFieldAliasCatalog {
         "farmer signature" to "farmerSignature", "agreement front" to "agreementFront",
         "agreement back" to "agreementBack", "land deed page 1" to "landDeedPage1",
         "land deed page 2" to "landDeedPage2", "linked farmers" to "linkedFarmers",
-        "field photos" to "fieldPhotos", "sensor iot reference" to "sensorIotReference",
-        "visit date" to "visitDate", "visitor" to "visitorName",
-        "other fertilizer name" to "otherFertilizerName",
         "fertilizer quantity" to "otherFertilizerQuantity",
         "fertilizer applications" to "otherFertilizerApplications",
-        "fertilizer application dates" to "fertilizerApplicationDates",
-        "drying event dates" to "dryingEventDates", "re flooding dates" to "refloodingDates",
-        "re-flooding dates" to "refloodingDates",
-        "year" to "year", "season" to "season", "yield" to "yield", "yield qtl acre" to "yield"
+        "re-flooding dates" to "refloodingDates", "yield qtl acre" to "yield"
     )
 
     fun normalizeLabel(raw: String): String =
