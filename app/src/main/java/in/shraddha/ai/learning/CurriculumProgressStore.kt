@@ -26,7 +26,8 @@ class CurriculumProgressStore(context: Context) {
         val completedPacks: Set<String>,
         val guardianMode: Boolean,
         val dailyLimitMinutes: Int,
-        val usedTodayMinutes: Int
+        val usedTodayMinutes: Int,
+        val guardianOverrideUntilMillis: Long
     ) {
     }
 
@@ -100,6 +101,7 @@ class CurriculumProgressStore(context: Context) {
         val today = java.time.LocalDate.now().toString()
         if (state.optString("usageDate") != today) {
             state.put("usageDate", today).put("usedTodayMinutes", 0)
+                .remove("guardianOverrideUntilMillis")
             writeState(state)
         }
         return Snapshot(
@@ -107,7 +109,8 @@ class CurriculumProgressStore(context: Context) {
             completedPacks = state.stringSet("completedPacks"),
             guardianMode = state.optBoolean("guardianMode", false),
             dailyLimitMinutes = state.optInt("dailyLimitMinutes", 45).coerceIn(5, 240),
-            usedTodayMinutes = (state.optInt("usedTodayMinutes", 0).coerceAtLeast(0) + activeSessionMinutesToday()).coerceAtMost(24 * 60)
+            usedTodayMinutes = (state.optInt("usedTodayMinutes", 0).coerceAtLeast(0) + activeSessionMinutesToday()).coerceAtMost(24 * 60),
+            guardianOverrideUntilMillis = state.optLong("guardianOverrideUntilMillis", 0L)
         )
     }
 
@@ -119,6 +122,26 @@ class CurriculumProgressStore(context: Context) {
     @Synchronized fun setDailyLimit(minutes: Int) {
         require(minutes in 5..240) { "Daily learning limit must be 5–240 minutes." }
         writeState(readState().put("dailyLimitMinutes", minutes))
+    }
+
+    /** Grants a short, encrypted, one-time learning extension after a successful parent PIN check. */
+    @Synchronized fun grantGuardianOverride(minutes: Int = 15) {
+        grantGuardianOverrideAt(System.currentTimeMillis(), minutes)
+    }
+
+    @Synchronized internal fun grantGuardianOverrideAt(nowMillis: Long, minutes: Int = 15) {
+        require(nowMillis > 0L && minutes in 5..60)
+        val state = readState()
+        require(state.optBoolean("guardianMode", false) && hasGuardianPin()) {
+            "Guardian Mode and a verified parent PIN are required for an extension."
+        }
+        state.put("guardianOverrideUntilMillis", nowMillis + minutes * 60_000L)
+        writeState(state)
+    }
+
+    @Synchronized internal fun hasGuardianOverrideAt(nowMillis: Long): Boolean {
+        require(nowMillis > 0L)
+        return readState().optLong("guardianOverrideUntilMillis", 0L) > nowMillis
     }
 
     @Synchronized fun markVerseComplete(reference: String) {
@@ -141,7 +164,8 @@ class CurriculumProgressStore(context: Context) {
 
     @Synchronized fun canStartLearning(): Boolean {
         val current = snapshot()
-        return !current.guardianMode || current.usedTodayMinutes < current.dailyLimitMinutes
+        return !current.guardianMode || current.usedTodayMinutes < current.dailyLimitMinutes ||
+            current.guardianOverrideUntilMillis > System.currentTimeMillis()
     }
 
     @Synchronized fun startSession() {
