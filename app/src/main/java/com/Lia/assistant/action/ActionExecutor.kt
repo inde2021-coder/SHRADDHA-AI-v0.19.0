@@ -54,7 +54,7 @@ object ActionExecutor {
                 if (!peer.online) return result.put("status", "error").put("message", "${peer.name} अभी offline है; कोई PC command नहीं भेजी गई।")
                 val action = JSONObject().put("kind", kind)
                 when (kind) {
-                    "hardware_status", "back", "home", "screenshot" -> Unit
+                    "hardware_status", "back", "home", "screenshot", "akkps_open", "akkps_runner", "akkps_inspect" -> Unit
                     "set_volume", "set_brightness" -> {
                         val percent = args.optInt("percent", -1)
                         if (percent !in 0..100) return result.put("status", "error").put("message", "PC percent 0 से 100 के बीच होना चाहिए।")
