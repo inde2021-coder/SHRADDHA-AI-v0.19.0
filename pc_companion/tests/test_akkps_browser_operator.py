@@ -170,8 +170,10 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
             for tool in ("delete", "clear", "save", "submit", ""):
                 with self.subTest(tool=tool), self.assertRaises(ValueError):
                     operator.activate_map_tool(tool, "Draw Polygon")
-            with self.assertRaises(ValueError):
-                operator.activate_map_tool("draw", "Password")
+            for label in ("Password", "Save Boundary", "Upload KML", "Clear Polygon", "Submit Plot"):
+                with self.subTest(label=label), self.assertRaises(ValueError):
+                    operator.activate_map_tool("draw", label)
+            self.assertRaises(ValueError, operator.activate_map_tool, "draw", "Save")
 
     def test_map_tool_requires_live_authenticated_page(self):
         with tempfile.TemporaryDirectory() as folder:
