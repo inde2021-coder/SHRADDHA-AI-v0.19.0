@@ -1484,6 +1484,26 @@ class AkkpsRunnerActivity : Activity() {
             prepareBoundaryForAkkpsUpload()
             return
         }
+        AkkpsRunnerPageWorkflowPolicy.plotId(raw)?.let { plotId ->
+            plotIdInput.setText(plotId)
+            status.text = "AKKPS Plot ID voice command से set हुई: $plotId"
+            return
+        }
+        AkkpsRunnerPageWorkflowPolicy.boundaryAction(raw)?.let { action ->
+            when (action) {
+                AkkpsBoundaryVoiceAction.INSPECT_MAP -> inspectLiveMap()
+                AkkpsBoundaryVoiceAction.VERIFY_UPLOAD -> verifyLiveBoundaryUpload()
+                AkkpsBoundaryVoiceAction.PREPARE_UPLOAD -> prepareBoundaryForAkkpsUpload()
+                AkkpsBoundaryVoiceAction.IMPORT_SATELLITE -> importSatelliteCandidate()
+                AkkpsBoundaryVoiceAction.START_GPS_WALK -> startGpsWalk()
+                AkkpsBoundaryVoiceAction.STOP_GPS_WALK -> stopGpsWalk()
+                AkkpsBoundaryVoiceAction.SAVE_LOCAL -> saveBoundary()
+                AkkpsBoundaryVoiceAction.REOPEN_LOCAL -> reopenBoundary()
+                AkkpsBoundaryVoiceAction.IMPORT_KML -> importBoundaryKml()
+                AkkpsBoundaryVoiceAction.EXPORT_KML -> exportBoundaryKml()
+            }
+            return
+        }
         AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection(raw)?.let { section ->
             addAwdRepeatedEntry(section)
             return
