@@ -19,7 +19,8 @@ class AkkpsRunnerCreateCommandPolicyTest {
     @Test fun rejectsAmbiguousOrHighImpactCreateCommands() {
         assertNull(AkkpsRunnerCreateCommandPolicy.resolve("create farmer and plot"))
         assertNull(AkkpsRunnerCreateCommandPolicy.resolve("create payment record"))
-        assertNull(AkkpsRunnerCreateCommandPolicy.resolve("create farmer submit"))
+        assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerCreateCommandPolicy.resolve("create farmer submit"))
+        assertEquals(AkkpsRunnerModule.PLOTS, AkkpsRunnerCreateCommandPolicy.resolve("new plot save"))
         assertNull(AkkpsRunnerCreateCommandPolicy.resolve("farmer"))
     }
 
