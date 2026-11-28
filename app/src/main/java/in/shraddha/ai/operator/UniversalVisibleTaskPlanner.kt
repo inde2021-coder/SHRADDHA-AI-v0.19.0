@@ -68,6 +68,16 @@ object UniversalVisibleTaskPlanner {
                     // existed in the old snapshot must be re-resolved from the live UI.
                     deferredTarget = screenMayHaveChanged || matches.size != 1
                     if (value.isNotEmpty()) return Result(error = "Click step में अतिरिक्त value स्वीकार नहीं है।")
+                    if (isLikeTarget(target)) {
+                        val explicitLike = listOf("like", "लाइक", "पसंद").any {
+                            userCommand.contains(it, ignoreCase = true)
+                        }
+                        val verifiedLikedState = listOf("unlike", "liked", " unlike", "अनलाइक", "पसंद किया")
+                            .any { expected.contains(it, ignoreCase = true) }
+                        if (!explicitLike || !verifiedLikedState) {
+                            return Result(error = "Like action के लिए explicit user intent और Unlike/Liked postcondition आवश्यक है।")
+                        }
+                    }
                     if (isHighImpactTarget(target)) {
                         val isSendButton = target.lowercase().trim() in setOf("send", "send message", "भेजें", "भेजो", "सेंड")
                         if (isSendButton) {
@@ -126,6 +136,9 @@ object UniversalVisibleTaskPlanner {
         }
         return Result(steps = steps)
     }
+
+    private fun isLikeTarget(value: String): Boolean =
+        value.lowercase().trim() in setOf("like", "like button", "लाइक", "पसंद")
 
     private fun isHighImpactTarget(value: String): Boolean {
         val normalized = value.lowercase().trim()
