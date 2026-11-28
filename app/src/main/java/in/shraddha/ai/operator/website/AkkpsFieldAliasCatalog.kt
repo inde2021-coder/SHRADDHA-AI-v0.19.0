@@ -11,7 +11,7 @@ object AkkpsFieldAliasCatalog {
         "village" to "villageBlockNumber", "village block" to "villageBlockNumber", "गाँव" to "villageBlockNumber", "गांव" to "villageBlockNumber",
         "remarks" to "remarks", "टिप्पणी" to "remarks",
         "total land area" to "totalLandAreaAcres", "कुल भूमि क्षेत्र" to "totalLandAreaAcres",
-        "paddy area" to "paddyAreaCoveredAcres", "paddy area covered" to "paddyAreaCoveredAcres", "धान क्षेत्र" to "paddyAreaCoveredAcres",
+        "paddy area" to "paddyAreaCoveredAcres", "paddy area covered" to "paddyAreaCoveredAcres", "paddy area covered acres" to "paddyAreaCoveredAcres", "धान क्षेत्र" to "paddyAreaCoveredAcres",
         "rice variety" to "riceVariety", "धान की किस्म" to "riceVariety",
         "sowing date" to "sowingDate", "बुवाई की तारीख" to "sowingDate",
         "flowering date" to "floweringDate", "फूल आने की तारीख" to "floweringDate",
