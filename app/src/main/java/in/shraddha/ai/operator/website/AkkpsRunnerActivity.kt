@@ -295,7 +295,8 @@ class AkkpsRunnerActivity : Activity() {
                         return false
                     }
                     val preparedBoundary = pendingBoundaryUploadUri
-                    val acceptsKml = params.acceptTypes.orEmpty().any { type ->
+                    val acceptedTypes = params.acceptTypes.orEmpty()
+                    val acceptsKml = acceptedTypes.isEmpty() || acceptedTypes.any { type ->
                         val value = type.trim().lowercase()
                         value.isBlank() || value == "*/*" ||
                             value.contains("kml") || value.contains("application/octet-stream")
@@ -554,7 +555,9 @@ class AkkpsRunnerActivity : Activity() {
               if(!section) return JSON.stringify({status:"section_container_missing"});
               const buttons=[...section.querySelectorAll("button")].filter(visible).filter(b=>{
                 const label=norm(b.innerText||b.getAttribute("aria-label")||b.title);
-                return b.type==="button" && /^(add|add row|add event|add date|add another|add another row|add visit|add application|add reading|add yield|जोड़ें|जोड़ें|जोड़ो|नई प्रविष्टि जोड़ें)$/.test(label);
+                const englishAdd=/^add\\b/.test(label) && !/\\b(submit|save|delete|remove|cancel)\\b/.test(label);
+                const hindiAdd=new Set(["जोड़ें","जोड़ें","जोड़ो","नई प्रविष्टि जोड़ें"]).has(label);
+                return b.type==="button" && (englishAdd || hindiAdd);
               });
               if(buttons.length!==1) return JSON.stringify({status:"add_control_ambiguous",count:buttons.length});
               const fields=[...section.querySelectorAll("input,select,textarea")];
@@ -783,7 +786,7 @@ class AkkpsRunnerActivity : Activity() {
                   const ids=(e.getAttribute("aria-labelledby")||"").split(/\s+/).filter(Boolean);
                   labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
                   labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
-                  return labels.map(norm).includes(key);
+                  return labels.map(norm).some(x=>x===key || x.includes(key));
                 });
               if(candidates.length!==1 || candidates[0].disabled || candidates[0].readOnly)
                 return JSON.stringify({status:"field_ambiguous",count:candidates.length});
@@ -814,7 +817,7 @@ class AkkpsRunnerActivity : Activity() {
                       const fieldMatches=fields.filter(e=>{
                         const labels=[...(e.labels||[])].map(x=>x.innerText||"");
                         labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
-                        return labels.map(norm).includes(label);
+                        return labels.map(norm).some(x=>x===label || x.includes(label));
                       });
                       const options=[...document.querySelectorAll('[role="option"]')]
                         .filter(e=>e.getClientRects().length && getComputedStyle(e).display!=="none" &&
@@ -1921,7 +1924,7 @@ class AkkpsRunnerActivity : Activity() {
                 .trim().uppercase().ifBlank { "GEMINI" }
             val system = """You map a user's AKKPS Runner data-entry command to the currently visible Farmer, Plot or AWD form.
 Return JSON only: {"assignments":[{"field":"exact visible label, name, id or placeholder","value":"literal user-provided value"}],"missing":["required information not supplied or unsupported manual step"],"submit":false}.
-Never invent or infer personal data, never modify a value, and never map a field unless the command explicitly supplies it. Match exact visible labels; prefer the exact label over a guessed alias. For checkbox/toggle fields accept only an explicit yes/no value. For radio/select fields use only an exact visible option value supplied by the user. Do not pretend that a repeated group, autocomplete, document/photo upload, map boundary, signature, or dynamic add-row operation has been completed when no direct field exists; report it in missing so the user can complete/review it. Do not create repeated values by guessing. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."""
+Never invent or infer personal data, never modify a value, and never map a field unless the command explicitly supplies it. Match exact visible labels; prefer the exact label over a guessed alias. For checkbox/toggle fields accept only an explicit yes/no value. For radio/select fields use only an exact visible option value supplied by the user. AWD repeated rows are added only by the explicit Runner voice action "add drying event", "add re-flooding date", "add fertilizer row", "add field visit", "add historical yield" or "add water level reading"; when a new row is pending, map supplied values only to that newest row. Autocomplete is selected only by a separate explicit user phrase naming the exact village, rice variety, farmer or plot suggestion; if the exact visible option is unavailable, report it missing. Document/photo commands only open the website's own file picker; never claim upload without a separate portal upload action and verified response. Map boundary commands may inspect the visible map or prepare a reviewed KML for the website's own file chooser; never claim direct drawing or portal save unless server success and record ID are verified. Do not create repeated values by guessing. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."""
             val actions = page.optJSONArray("actions") ?: JSONArray()
             val forms = page.optJSONArray("forms") ?: JSONArray()
             val tables = page.optJSONArray("tables") ?: JSONArray()
@@ -1988,7 +1991,15 @@ Return exact JSON only. Do not include prose or markdown."""
                         "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
                             missingItems.filter { it.isNotBlank() }.joinToString() + "। Submit रोका गया।"
                     } else null
-                    fillValues(values, shouldSubmit, blockedReason)
+                    if (pendingAwdRepeaterSection != null) {
+                        if (shouldSubmit || blockedReason != null) {
+                            status.text = blockedReason ?: "नए AWD row के values review करें; Submit अलग से होगा।"
+                            return@runOnUiThread
+                        }
+                        fillLatestAwdRepeater(values)
+                    } else {
+                        fillValues(values, shouldSubmit, blockedReason)
+                    }
                 }
             }.start()
         }
