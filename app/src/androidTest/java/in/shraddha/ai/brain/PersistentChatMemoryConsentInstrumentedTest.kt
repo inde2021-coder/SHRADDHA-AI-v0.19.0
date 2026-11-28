@@ -71,6 +71,35 @@ class PersistentChatMemoryConsentInstrumentedTest {
         }
     }
 
+    @Test fun freshOptInDoesNotRestoreRecapFromEarlierDisabledPeriod() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE)
+        val vaultPrefs = context.getSharedPreferences("shraddha_secure_vault", Context.MODE_PRIVATE)
+        val vault = SecureMemoryVault(context)
+        val previousConsent = prefs.getBoolean("remember_conversations", false)
+        val previousPending = prefs.getBoolean("conversation_memory_clear_pending", false)
+        val previousPayload = vaultPrefs.getString("slot_memory", null)
+        try {
+            assertTrue(vault.save("recap from before opt-out").isSuccess)
+            assertTrue(prefs.edit()
+                .putBoolean("remember_conversations", false)
+                .putBoolean("conversation_memory_clear_pending", false)
+                .commit())
+
+            PersistentChatMemory.setEnabled(context, true)
+
+            assertTrue(PersistentChatMemory.isEnabled(context))
+            assertEquals("", vault.load().getOrThrow())
+        } finally {
+            if (previousPayload == null) vaultPrefs.edit().remove("slot_memory").commit()
+            else vaultPrefs.edit().putString("slot_memory", previousPayload).commit()
+            prefs.edit()
+                .putBoolean("remember_conversations", previousConsent)
+                .putBoolean("conversation_memory_clear_pending", previousPending)
+                .commit()
+        }
+    }
+
     @Test fun unreadableEncryptedRecapIsNotReplacedByNewTurn() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = context.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE)
