@@ -50,7 +50,7 @@ class OfflineIndicVoiceSession(
         val status = IndicConformerRuntime.status(context, language)
         if (status.availability != IndicConformerRuntime.Availability.READY) {
             running.set(false)
-            onStatus(status.detail)
+            onError(status.detail)
             return
         }
         audio = LiveAudioIO(
