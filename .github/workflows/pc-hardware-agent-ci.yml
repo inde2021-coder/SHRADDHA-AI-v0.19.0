@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/complete-pending-shraddha-features
+      - feature/akkps-universal-browser-operator
       - fix/live-app-operator-glass-ui-and-actions
     paths:
       - "pc_companion/**"
@@ -18,6 +19,7 @@ on:
     branches:
       - main
       - feature/shraddha-home-screen-polish
+      - feature/akkps-universal-browser-operator
     paths:
       - "pc_companion/**"
       - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
@@ -59,10 +61,10 @@ jobs:
           python pc_companion/tests/test_file_transfer.py -v
 
       - name: Compile Windows companion source
-        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
+        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py pc_companion/akkps_browser_operator.py pc_companion/akkps_browser_ui.py
 
       - name: Build Windows PC companion executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --collect-all playwright --collect-all greenlet --collect-all pyee --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
 
       - name: Upload Windows PC companion executable
         uses: actions/upload-artifact@v6
