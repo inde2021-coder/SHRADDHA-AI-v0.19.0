@@ -66,6 +66,8 @@ object GeminiTextClient {
                 }
 
                 val body = response.body?.string() ?: ""
+                // Do not cache or use discovery results if consent was revoked in flight.
+                `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
                 val json = JSONObject(body)
                 val models = json.optJSONArray("models") ?: JSONArray()
 
