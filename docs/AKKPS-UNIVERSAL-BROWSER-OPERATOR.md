@@ -82,3 +82,12 @@ No stealth, CAPTCHA bypass, MFA bypass, or access-control bypass is implemented.
 - Boundary upload and Save→Reopen require the active authenticated URL to identify the exact Plot record. A typed Plot ID alone is not sufficient.
 - Post-reload map/vector-layer hints are still not proof of exact polygon identity or persistence. The authorized Runner session must visually compare the saved boundary on the same Plot; unknown endpoint or map-engine behavior is not guessed.
 
+
+
+## Polygon Save → Reopen evidence (2026-11-28)
+
+- Android and Windows capture a bounded fingerprint of visible, filled SVG polygon-like paths immediately before the portal boundary Upload action and compare it with the same Plot page after reload.
+- The fingerprint compares rendered SVG path attributes only. It is not a server-side geometry read, does not prove that the geometry belongs to the returned Record ID, and may differ if the map engine reprojects/rescales geometry or uses a different renderer.
+- A match is reported only as supporting visual evidence. A mismatch or missing fingerprint remains uncertain; the workflow never retries an upload automatically.
+- If AKKPS renders polygons in canvas/WebGL or uses non-SVG geometry, the fingerprint is unavailable by design.
+- Final acceptance still requires the owner to reopen the same Plot in the authenticated AKKPS Runner and visually confirm that the saved boundary is present and correct. Map count, vector-layer hints, or an SVG fingerprint alone must never be labelled verified persistence.
