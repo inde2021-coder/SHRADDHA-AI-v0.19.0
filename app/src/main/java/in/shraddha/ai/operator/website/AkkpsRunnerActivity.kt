@@ -25,6 +25,10 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
 import java.net.URI
@@ -138,6 +142,7 @@ class AkkpsRunnerActivity : Activity() {
         root.addView(command, LinearLayout.LayoutParams(-1, dp(82)))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actions.addView(action("Farmer Card OCR") { chooseFarmerCardImage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -606,6 +611,47 @@ class AkkpsRunnerActivity : Activity() {
             })()
         """.trimIndent()
         web.evaluateJavascript(js, null)
+    }
+
+    private fun chooseFarmerCardImage() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivityForResult(pick, REQUEST_FARMER_CARD_OCR) }
+            .onFailure { status.text = "Farmer Card image picker उपलब्ध नहीं है।" }
+    }
+
+    /** Hindi + Latin OCR stays on-device; raw card text is never uploaded or persisted. */
+    private fun processFarmerCardImage(uri: Uri) {
+        status.text = "Farmer Card का local OCR चल रहा है…"
+        val input = runCatching { InputImage.fromFilePath(this, uri) }.getOrElse {
+            status.text = "चुनी गई तस्वीर पढ़ी नहीं जा सकी: " + (it.localizedMessage ?: "file error")
+            return
+        }
+        val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        latin.process(input).addOnSuccessListener { latinResult ->
+            devanagari.process(input).addOnSuccessListener { devResult ->
+                val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\\n" + devResult.text)
+                latin.close(); devanagari.close()
+                if (!parsed.readyForUserReview) {
+                    status.text = "कार्ड से स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या आवाज़ से जानकारी दें।"
+                } else {
+                    command.setText(parsed.toRunnerCommand())
+                    val missing = parsed.missing.joinToString()
+                    val missingText = if (missing.isBlank()) "मुख्य fields मिलीं" else "अभी जानकारी चाहिए: $missing"
+                    status.text = "स्थानीय OCR ने ${parsed.assignments.size} candidate fields पहचाने। $missingText। हर मान जाँचें/सुधारें। कोई field स्वतः submit नहीं हुई।"
+                }
+            }.addOnFailureListener { error ->
+                latin.close(); devanagari.close()
+                status.text = "Hindi OCR उपलब्ध नहीं: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+            }
+        }.addOnFailureListener { error ->
+            latin.close(); devanagari.close()
+            status.text = "OCR नहीं चल पाया: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+        }
     }
 
     private fun inspectPage(onReady: ((JSONObject) -> Unit)? = null) {
@@ -1287,6 +1333,9 @@ Return exact JSON only. Do not include prose or markdown."""
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
         }
+        if (requestCode == REQUEST_FARMER_CARD_OCR && resultCode == RESULT_OK) {
+            data?.data?.let(::processFarmerCardImage)
+        }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
             val content = pendingKml; pendingKml = null
@@ -1409,6 +1458,7 @@ Return exact JSON only. Do not include prose or markdown."""
 
     companion object {
         private const val REQUEST_FILE = 7314
+        private const val REQUEST_FARMER_CARD_OCR = 7320
         private const val REQUEST_LOCATION = 7315
         private const val REQUEST_GPS_WALK = 7316
         private const val REQUEST_KML_EXPORT = 7317
