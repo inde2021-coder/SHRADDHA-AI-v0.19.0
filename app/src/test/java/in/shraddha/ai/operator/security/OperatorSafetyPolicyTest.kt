@@ -79,4 +79,11 @@ class OperatorSafetyPolicyTest {
             ).risk)
     }
 
+    @Test fun requiresApprovalForPublicShareFollowAndCommentActions() {
+        listOf("share", "follow", "comment").forEach { action ->
+            assertEquals(action, OperatorSafetyPolicy.Risk.CONFIRM,
+                OperatorSafetyPolicy.assess("CLICK_TEXT", action, "", "Completed").risk)
+        }
+    }
+
 }
