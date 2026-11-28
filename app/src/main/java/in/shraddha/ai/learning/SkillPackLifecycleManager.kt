@@ -253,7 +253,6 @@ class SkillPackLifecycleManager(context: Context) {
     }
 
     @Synchronized
-    @Synchronized
     fun rollback(packId: String): Boolean {
         require(validId(packId))
         val stateJson = readState()
