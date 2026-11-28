@@ -102,7 +102,9 @@ class OperatorEngine(
             it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
         }
         val screenChanged = screenFingerprint(before) != screenFingerprint(after)
-        val actionVerified = if (step.expectedVisibleText.isNotBlank()) expectedVisible else when (step.action) {
+        val actionVerified = if (step.action == OperatorActionType.SELECT_FILE) {
+            screenChanged && expectedVisible
+        } else if (step.expectedVisibleText.isNotBlank()) expectedVisible else when (step.action) {
             OperatorActionType.TYPE_TEXT -> step.value.isNotBlank() && after.elements.any {
                 !it.password && (it.text.contains(step.value, true) || it.description.contains(step.value, true))
             }
