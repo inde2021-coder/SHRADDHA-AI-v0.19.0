@@ -25,7 +25,7 @@ data class ScreenSnapshot(
     val elements: List<ScreenElement>
 )
 
-enum class OperatorActionType { OPEN_APP, CLICK_TEXT, TYPE_TEXT, BACK, HOME, SCROLL_FORWARD }
+enum class OperatorActionType { OPEN_APP, CLICK_TEXT, TYPE_TEXT, SELECT_FILE, BACK, HOME, SCROLL_FORWARD, SCROLL_BACKWARD }
 
 data class OperatorStep(
     val action: OperatorActionType,
