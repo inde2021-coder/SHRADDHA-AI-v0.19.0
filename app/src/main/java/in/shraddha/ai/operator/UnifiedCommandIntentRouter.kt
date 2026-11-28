@@ -45,7 +45,7 @@ object UnifiedCommandIntentRouter {
         UnifiedCommandAction.PAY to listOf("pay", "payment", "भुगतान", "पेमेंट", "पैसे भेज"),
         UnifiedCommandAction.PUBLISH to listOf("publish", "post publicly", "प्रकाशित", "पब्लिश"),
         UnifiedCommandAction.SUBMIT to listOf("submit", "जमा करो", "जमा करें", "सबमिट"),
-        UnifiedCommandAction.SEND to listOf("send", "message", "भेजो", "भेजना", "मैसेज"),
+        UnifiedCommandAction.SEND to listOf("send", "भेजो", "भेजना", "भेजें", "मैसेज भेज"),
         UnifiedCommandAction.CALL to listOf("call", "dial", "कॉल करो", "फोन लगाओ"),
         UnifiedCommandAction.DOWNLOAD to listOf("download", "export", "डाउनलोड", "निकालो"),
         UnifiedCommandAction.UPLOAD to listOf("upload", "attach", "अपलोड", "लगाओ"),
@@ -66,12 +66,31 @@ object UnifiedCommandIntentRouter {
         val raw = command.trim()
         if (raw.isEmpty() || raw.length > 4000) return unknown(raw)
         val normalized = raw.lowercase().replace(Regex("\\s+"), " ")
-        val domain = domainTerms.entries.firstOrNull { (_, terms) ->
-            terms.any { normalized.contains(it) }
-        }?.key ?: UnifiedCommandDomain.UNKNOWN
-        val action = actionTerms.entries.firstOrNull { (_, terms) ->
-            terms.any { normalized.contains(it) }
-        }?.key ?: UnifiedCommandAction.UNKNOWN
+        val domainMatches = domainTerms.entries.mapNotNull { (domain, terms) ->
+            val position = terms.map { term -> termPosition(normalized, term) }
+                .filter { it >= 0 }.minOrNull()
+            position?.let { it to domain }
+        }.sortedBy { it.first }
+        val actionMatches = actionTerms.entries.mapNotNull { (action, terms) ->
+            val position = terms.map { term -> termPosition(normalized, term) }
+                .filter { it >= 0 }.minOrNull()
+            position?.let { it to action }
+        }.sortedBy { it.first }
+
+        val explicitDomainMatches = domainMatches.filter { it.second != UnifiedCommandDomain.PHONE }
+        val domain = when {
+            // An explicit Windows/PC destination controls the domain even when the object
+            // is a file; "file on Windows PC" must route to the PC adapter.
+            explicitDomainMatches.any { it.second == UnifiedCommandDomain.PC } -> UnifiedCommandDomain.PC
+            // Prefer a named app/service (WhatsApp, email, AKKPS, etc.) over the generic
+            // phone channel when both appear, e.g. "call on WhatsApp".
+            explicitDomainMatches.isNotEmpty() -> explicitDomainMatches.first().second
+            else -> domainMatches.firstOrNull()?.second ?: UnifiedCommandDomain.UNKNOWN
+        }
+        // Multiple distinct verbs in one clause are ambiguous. The planner should split
+        // explicit sequences; otherwise ask the user instead of choosing the first verb.
+        val distinctActions = actionMatches.map { it.second }.distinct()
+        val action = distinctActions.singleOrNull() ?: UnifiedCommandAction.UNKNOWN
         val missingPart = domain == UnifiedCommandDomain.UNKNOWN || action == UnifiedCommandAction.UNKNOWN
         val confidence = when {
             domain != UnifiedCommandDomain.UNKNOWN && action != UnifiedCommandAction.UNKNOWN -> 0.90f
@@ -81,7 +100,12 @@ object UnifiedCommandIntentRouter {
         val highImpact = action in setOf(
             UnifiedCommandAction.DELETE,
             UnifiedCommandAction.PAY,
-            UnifiedCommandAction.PUBLISH
+            UnifiedCommandAction.PUBLISH,
+            UnifiedCommandAction.SUBMIT,
+            UnifiedCommandAction.SEND,
+            UnifiedCommandAction.SHARE,
+            UnifiedCommandAction.UPLOAD,
+            UnifiedCommandAction.CALL
         )
         return UnifiedCommandIntent(
             domain = domain,
@@ -91,6 +115,13 @@ object UnifiedCommandIntentRouter {
             requiresHighImpactApproval = highImpact,
             originalCommand = raw
         )
+    }
+
+    private fun termPosition(text: String, term: String): Int {
+        // Apply Unicode-aware token boundaries to Hindi as well as Latin terms.
+        // A verb fragment inside a longer Hindi word must not trigger an action.
+        val pattern = Regex("(?<![\\p{L}\\p{M}\\p{N}])" + Regex.escape(term) + "(?![\\p{L}\\p{M}\\p{N}])")
+        return pattern.find(text)?.range?.first ?: -1
     }
 
     private fun unknown(raw: String) = UnifiedCommandIntent(

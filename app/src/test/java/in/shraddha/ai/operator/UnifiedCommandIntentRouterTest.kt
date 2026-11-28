@@ -9,7 +9,7 @@ class UnifiedCommandIntentRouterTest {
         assertEquals(UnifiedCommandDomain.AKKPS, result.domain)
         assertEquals(UnifiedCommandAction.SUBMIT, result.action)
         assertFalse(result.needsClarification)
-        assertFalse(result.requiresHighImpactApproval)
+        assertTrue(result.requiresHighImpactApproval)
         assertEquals("AKKPS में किसान का रिकॉर्ड submit करो", result.originalCommand)
     }
 
@@ -32,6 +32,25 @@ class UnifiedCommandIntentRouterTest {
         assertFalse(noAction.needsClarification)
     }
 
+    @Test fun explicitAppDomainWinsOverGenericPhoneChannel() {
+        val result = UnifiedCommandIntentRouter.classify("call on WhatsApp")
+        assertEquals(UnifiedCommandDomain.WHATSAPP, result.domain)
+        assertEquals(UnifiedCommandAction.CALL, result.action)
+        assertFalse(result.needsClarification)
+    }
+
+    @Test fun HindiActionTermsRequireUnicodeTokenBoundaries() {
+        val embeddedVerb = UnifiedCommandIntentRouter.classify("अभेजें")
+        assertEquals(UnifiedCommandAction.UNKNOWN, embeddedVerb.action)
+        assertTrue(embeddedVerb.needsClarification)
+        val combiningMarkPrefix = UnifiedCommandIntentRouter.classify("ाभेजें")
+        assertEquals(UnifiedCommandAction.UNKNOWN, combiningMarkPrefix.action)
+
+        val standaloneVerb = UnifiedCommandIntentRouter.classify("AKKPS में रिकॉर्ड भेजें")
+        assertEquals(UnifiedCommandAction.SEND, standaloneVerb.action)
+        assertEquals(UnifiedCommandDomain.AKKPS, standaloneVerb.domain)
+    }
+
     @Test fun highImpactActionsAreFlaggedButNeverAutoApproved() {
         val delete = UnifiedCommandIntentRouter.classify("delete this farmer record in AKKPS")
         assertTrue(delete.requiresHighImpactApproval)
@@ -39,6 +58,15 @@ class UnifiedCommandIntentRouterTest {
 
         val pay = UnifiedCommandIntentRouter.classify("pay this invoice from phone")
         assertTrue(pay.requiresHighImpactApproval)
+
+        val send = UnifiedCommandIntentRouter.classify("send WhatsApp message")
+        assertTrue(send.requiresHighImpactApproval)
+
+        val call = UnifiedCommandIntentRouter.classify("call on WhatsApp")
+        assertTrue(call.requiresHighImpactApproval)
+
+        val share = UnifiedCommandIntentRouter.classify("share this file on PC")
+        assertTrue(share.requiresHighImpactApproval)
     }
 
     @Test fun emptyAndOversizedCommandsRemainUnknown() {
