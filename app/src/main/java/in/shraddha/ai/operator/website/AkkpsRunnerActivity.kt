@@ -239,6 +239,7 @@ class AkkpsRunnerActivity : Activity() {
         liveMapActions.addView(action("Live Map Draw") { activateLiveMapTool("draw") }, LinearLayout.LayoutParams(0, dp(40), 1f))
         liveMapActions.addView(action("Live Map Edit") { activateLiveMapTool("edit") }, LinearLayout.LayoutParams(0, dp(40), 1f))
         liveMapActions.addView(action("Inspect Live Map") { inspectLiveMap() }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        liveMapActions.addView(action("Save AKKPS Boundary") { saveLiveBoundaryToPortal() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         liveMapActions.addView(action("AKKPS Map Reopen") { reopenLiveBoundaryMap() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(liveMapActions)
         status = TextView(this).apply {
@@ -1154,6 +1155,92 @@ class AkkpsRunnerActivity : Activity() {
                         }
                     }.show()
             }.show()
+    }
+
+    /** Click only a uniquely labelled non-submit boundary Upload/Save control after two confirmations. */
+    private fun saveLiveBoundaryToPortal() {
+        val plotId = plotIdInput.text.toString().trim()
+        if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS ||
+            plotId.isBlank() || !plotRouteMatches(plotId)) {
+            status.text = "उसी AKKPS Plot का authenticated page खोलें और Plot ID भरें।"
+            return
+        }
+        val field = EditText(this).apply {
+            hint = "Portal पर दिख रहा exact Boundary Upload/Save button label"
+            setSingleLine(true); setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
+            setPadding(dp(12), dp(8), dp(12), dp(8)); setBackgroundColor(0xFF142536.toInt())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS Boundary Save")
+            .setMessage("केवल उसी Plot form का exact non-submit Boundary Upload/Save button label दें। Shraddha पहले एक KML attachment और एक exact button जाँचेगी; पूरा Plot form Submit नहीं करेगी।")
+            .setView(field)
+            .setNegativeButton("रद्द करें", null)
+            .setPositiveButton("जाँचें और आगे बढ़ें") { _, _ ->
+                val label = field.text.toString().trim()
+                if (label.isBlank() || label.length > 100 ||
+                    Regex("(?i)submit|delete|remove|clear|cancel|reset|जमा|सबमिट|हटाएं|मिटाएं|साफ").containsMatchIn(label) ||
+                    !Regex("(?i)boundary|kml|upload|save|सीमा|अपलोड").containsMatchIn(label)) {
+                    status.text = "अमान्य button label। Submit/Delete/Clear controls स्वीकार नहीं हैं।"
+                    return@setPositiveButton
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Portal पर Boundary Upload की पुष्टि")
+                    .setMessage("Plot: $plotId\nButton: $label\n\nयह action AKKPS पर वास्तविक boundary update कर सकता है। केवल exact non-submit button click होगा। यदि page पर ऐसा अलग button नहीं है तो cancel करें।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("AKKPS पर Upload करें") { _, _ ->
+                        val script = """
+                            (() => {
+                              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\\s+/g,' ').trim();
+                              const visible=e=>!!(e && e.getClientRects().length &&
+                                getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' &&
+                                !e.closest('[hidden],[aria-hidden="true"]'));
+                              const forms=[...document.querySelectorAll('form')].filter(visible);
+                              if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
+                              const files=[...forms[0].querySelectorAll('input[type=file]')].filter(e=>e.files&&e.files.length)
+                                .flatMap(e=>[...e.files].map(f=>f.name)).filter(n=>/\\.kml$/i.test(n));
+                              if(files.length!==1 || !files[0].toLowerCase().includes(__PLOT_ID__.toLowerCase()))
+                                return JSON.stringify({status:'kml_not_attached'});
+                              const wanted=norm(__LABEL__);
+                              const buttons=[...forms[0].querySelectorAll('button,input[type=button], [role=button]')]
+                                .filter(visible).filter(e=>{
+                                  const type=String(e.getAttribute('type')||'').toLowerCase();
+                                  if(type==='submit' || e.matches('input[type=submit]')) return false;
+                                  const label=norm(e.innerText||e.value||e.getAttribute('aria-label')||e.title);
+                                  return label===wanted;
+                                });
+                              if(buttons.length!==1) return JSON.stringify({status:'button_not_unique',count:buttons.length});
+                              const button=buttons[0];
+                              if(button.disabled || button.getAttribute('aria-disabled')==='true')
+                                return JSON.stringify({status:'button_disabled'});
+                              button.click();
+                              return JSON.stringify({status:'clicked',file:files[0],label:wanted});
+                            })()
+                        """.trimIndent()
+                            .replace("__PLOT_ID__", JSONObject.quote(plotId))
+                            .replace("__LABEL__", JSONObject.quote(label))
+                        web.evaluateJavascript(script) { raw ->
+                            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+                            if (result?.optString("status") == "clicked") {
+                                pendingBoundaryUploadPreparedAt = System.currentTimeMillis()
+                                pendingBoundaryUploadPlotId = plotId
+                                pendingBoundaryReopenRecordId = null
+                                pendingBoundaryReopenPlotId = null
+                                pendingBoundaryReopenUrl = null
+                                status.text = "AKKPS का exact non-submit Boundary Upload button click हुआ। Server response verify करने के लिए ‘verify boundary upload’ बोलें। दोबारा click न करें।"
+                            } else {
+                                status.text = when (result?.optString("status")) {
+                                    "form_not_unique" -> "एक visible Plot form नहीं मिला; कोई upload action नहीं हुआ।"
+                                    "kml_not_attached" -> "इसी Plot ID की एक KML attachment नहीं मिली; कोई upload action नहीं हुआ।"
+                                    "button_not_unique" -> "Exact button unique नहीं है; कोई upload action नहीं हुआ।"
+                                    "button_disabled" -> "Portal का boundary button disabled है; कोई action नहीं हुआ।"
+                                    else -> "AKKPS boundary upload control verify नहीं हुआ; कोई action नहीं हुआ।"
+                                }
+                            }
+                        }
+                    }
+                    .show()
+            }
+            .show()
     }
 
     /**
