@@ -1066,8 +1066,10 @@ class AkkpsBrowserOperator:
         if tool_key not in {"draw", "edit"}:
             raise ValueError("Map tool must be draw or edit.")
         label = " ".join(str(exact_button_label or "").split())
-        if not label or len(label) > 100 or SENSITIVE_LABEL.search(label):
-            raise ValueError("Provide the exact visible Draw/Edit control label.")
+        if (not label or len(label) > 100 or SENSITIVE_LABEL.search(label) or
+                re.search(r"(save|upload|submit|delete|remove|clear|cancel|reset|जमा|सबमिट|हटाएं|मिटाएं|साफ)", label, re.I) or
+                not re.search(r"(draw|polygon|edit|vertex|boundary|geometry|point|बहुभुज|सीमा|बिंदु|रेखा|नक्शा|मानचित्र|संपादित)", label, re.I)):
+            raise ValueError("Provide an exact Draw/Edit/Polygon/Boundary control label; Save, Upload, Clear and Submit controls are blocked.")
         validate_runner_url(self.page.url)
         route = urlparse(self.page.url).path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
