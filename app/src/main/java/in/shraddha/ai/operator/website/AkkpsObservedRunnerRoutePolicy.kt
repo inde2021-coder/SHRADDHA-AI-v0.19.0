@@ -28,7 +28,8 @@ object AkkpsObservedRunnerRoutePolicy {
             !AkkpsWebsiteProfile.acceptsUrl(currentUrl)) return null
         return runCatching {
             val current = URI(currentUrl)
-            val target = URI(current, rawUrl)
+            // URI.resolve is the java.net.URI API for resolving relative and absolute links.
+            val target = current.resolve(rawUrl)
             if (!AkkpsWebsiteProfile.acceptsUrl(target.toString()) ||
                 !target.host.equals(current.host, true) ||
                 target.userInfo != null || target.rawQuery != null || target.rawFragment != null) return null
