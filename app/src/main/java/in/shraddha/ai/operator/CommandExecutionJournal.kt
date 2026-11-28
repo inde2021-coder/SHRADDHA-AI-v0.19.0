@@ -55,7 +55,13 @@ class CommandExecutionJournal(context: Context) {
             val samePlanShape = existing.steps.map { Triple(it.id, it.capability, it.action) } ==
                 steps.map { Triple(it.id, it.capability, it.action) }
             // Never reuse a recent plan for a different set/order of actions.
-            return if (samePlanShape) existing else null
+            if (!samePlanShape) return null
+            // A fully blocked/skipped plan never dispatched a side effect; allow an
+            // explicit retry after the user fixes permission/confirmation/clarification.
+            val safeToRetryWithoutReplay = existing.steps.all {
+                it.state in setOf(CommandStepState.BLOCKED, CommandStepState.SKIPPED)
+            }
+            if (!safeToRetryWithoutReplay) return existing
         }
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
