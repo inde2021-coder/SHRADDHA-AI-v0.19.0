@@ -1029,12 +1029,19 @@ class AkkpsBrowserOperator:
           const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
           const clean = e => (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '')
             .replace(/\\s+/g, ' ').trim().slice(0, 100);
-          const maps = [...document.querySelectorAll(
-            '.leaflet-container, .mapboxgl-map, [role=application], [aria-label*=map i], canvas'
-          )].filter(visible).slice(0, 12).map(e => ({
+          const mapSelector = '.leaflet-container, .mapboxgl-map, .ol-viewport, .gm-style, ' +
+            '[data-testid*="map" i], [role=application][aria-label*=map i], [aria-label*=map i]';
+          const candidates = [...document.querySelectorAll(mapSelector)].filter(visible);
+          const engineRoots = candidates.filter(e =>
+            e.classList.contains('leaflet-container') || e.classList.contains('mapboxgl-map') ||
+            e.classList.contains('ol-viewport') || e.classList.contains('gm-style'));
+          const preferred = engineRoots.length ? engineRoots : candidates;
+          const roots = preferred.filter(e => !preferred.some(other => other !== e && other.contains(e)));
+          const maps = roots.slice(0, 12).map(e => ({
             kind: e.classList.contains('leaflet-container') ? 'leaflet' :
-              e.classList.contains('mapboxgl-map') ? 'mapbox' :
-              e.tagName.toLowerCase() === 'canvas' ? 'canvas' : 'application',
+              e.classList.contains('mapboxgl-map') ? 'mapbox-gl' :
+              e.classList.contains('ol-viewport') ? 'openlayers' :
+              e.classList.contains('gm-style') ? 'google-maps' : 'labelled-map',
             label: clean(e), width: Math.round(e.getBoundingClientRect().width),
             height: Math.round(e.getBoundingClientRect().height)
           }));
@@ -1049,14 +1056,14 @@ class AkkpsBrowserOperator:
           const engine = window.L ? 'leaflet' :
             (window.mapboxgl ? 'mapbox-gl' : (window.google && window.google.maps ? 'google-maps' :
             (window.ol ? 'openlayers' : (window.maplibregl ? 'maplibre' : 'unknown'))));
-          const polygonHints = document.querySelectorAll(
-            '.leaflet-interactive.leaflet-polygon, .ol-overlaycontainer svg path, [data-geometry-type="polygon" i]'
+          const vectorLayerHints = document.querySelectorAll(
+            '.leaflet-overlay-pane svg path, .ol-overlaycontainer svg path, [data-layer-type*="polygon" i], [data-geometry-type="polygon" i]'
           ).length;
-          return {engine, maps, controls, uploads, polygonHints};
+          return {engine, maps, controls, uploads, vectorLayerHints};
         }""")
         return {"page": _safe_runner_location(self.page.url)[1],
                 "map_engine": data["engine"], "maps": data["maps"], "boundary_controls": data["controls"],
-                "file_inputs": data.get("uploads", []), "visible_layer_hints": data.get("polygonHints", 0),
+                "file_inputs": data.get("uploads", []), "visible_vector_layer_hints": data.get("vectorLayerHints", 0),
                 "geometry_changed": False, "submitted": False,
                 "note": "No coordinates or farmer records were read. KML may be attached to an exact visible Plot boundary field; portal drawing/save still requires live page verification."}
 
