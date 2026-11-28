@@ -61,6 +61,13 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertRegex(label, SENSITIVE_LABEL)
 
+    def test_only_explicit_final_submit_labels_are_accepted(self):
+        from pc_companion.akkps_browser_operator import _is_explicit_submit_label
+        for label in ("Submit", "Submit Report", "Submit Plot", "Submit Registration", "जमा करें", "सबमिट करें"):
+            self.assertTrue(_is_explicit_submit_label(label), label)
+        for label in ("Save Draft", "Save", "Add visit", "Remove", "Cancel", ""):
+            self.assertFalse(_is_explicit_submit_label(label), label)
+
     def test_server_save_verification_requires_success_record_id_and_approved_host(self):
         url = "https://www.akkps.ngo/api/runner/plots"
         self.assertEqual(
