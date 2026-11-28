@@ -24,6 +24,12 @@ class AkkpsRunnerCreateCommandPolicyTest {
         assertNull(AkkpsRunnerCreateCommandPolicy.resolve("farmer"))
     }
 
+    @Test fun acceptsLongerExplicitDataEntryCommandsWithinRunnerLimit() {
+        val command = "create farmer " + "name=Ram; village=Rampur; ".repeat(20)
+        assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerCreateCommandPolicy.resolve(command))
+        assertNull(AkkpsRunnerCreateCommandPolicy.resolve("create farmer " + "x".repeat(3001)))
+    }
+
     @Test fun onlyKnownRunnerCreateRoutesAreReturned() {
         assertEquals("/runner/farmers/new", AkkpsRunnerCreateCommandPolicy.route(AkkpsRunnerModule.FARMERS))
         assertEquals("/runner/plots/new", AkkpsRunnerCreateCommandPolicy.route(AkkpsRunnerModule.PLOTS))
