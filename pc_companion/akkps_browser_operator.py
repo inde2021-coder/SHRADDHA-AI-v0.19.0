@@ -377,6 +377,9 @@ class AkkpsBrowserOperator:
         if tag == "select":
             if field.get_attribute("multiple") is not None:
                 raise RuntimeError("Multi-select fields require a dedicated reviewed action.")
+            options = [" ".join(text.split()) for text in field.locator("option").all_text_contents()]
+            if value not in options:
+                raise RuntimeError("Dropdown value must exactly match a visible option.")
             field.select_option(label=value)
         elif field_type in {"checkbox", "radio"}:
             raise RuntimeError("Checkbox/radio choices require a dedicated reviewed action.")
