@@ -61,10 +61,12 @@ object UniversalVisibleTaskPlanner {
                             .any { it.isNotBlank() && it.trim().equals(target, true) }
                     }
                     if (target.isBlank()) return Result(error = "Step $index का clickable target खाली है।")
-                    if (matches.size != 1) {
-                        if (!screenMayHaveChanged) return Result(error = "Step $index का clickable target स्क्रीन पर exact और unique नहीं है।")
-                        deferredTarget = true // OperatorEngine re-observes and requires one exact target before dispatch.
+                    if (matches.size != 1 && !screenMayHaveChanged) {
+                        return Result(error = "Step $index का clickable target स्क्रीन पर exact और unique नहीं है।")
                     }
+                    // After any prior action that can change the screen, even a target that
+                    // existed in the old snapshot must be re-resolved from the live UI.
+                    deferredTarget = screenMayHaveChanged || matches.size != 1
                     if (value.isNotEmpty()) return Result(error = "Click step में अतिरिक्त value स्वीकार नहीं है।")
                     if (isHighImpactTarget(target)) {
                         explicitlyAuthorized = isExplicitSendSequence(userCommand, target, expected, steps)
@@ -79,10 +81,11 @@ object UniversalVisibleTaskPlanner {
                             .any { it.isNotBlank() && it.trim().equals(target, true) }
                     }
                     if (target.isBlank()) return Result(error = "Step $index का editable field target खाली है।")
-                    if (matches.size != 1) {
-                        if (!screenMayHaveChanged) return Result(error = "Step $index का editable field exact और unique नहीं है।")
-                        deferredTarget = true
+                    if (matches.size != 1 && !screenMayHaveChanged) {
+                        return Result(error = "Step $index का editable field exact और unique नहीं है।")
                     }
+                    // Never reuse a stale editable target after a screen transition.
+                    deferredTarget = screenMayHaveChanged || matches.size != 1
                     if (value.isBlank() || !userCommand.contains(value, ignoreCase = true)) {
                         return Result(error = "Step $index का typed value user command में नहीं मिला; अनुमानित data रोका गया।")
                     }
