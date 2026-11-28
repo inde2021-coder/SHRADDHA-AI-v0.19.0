@@ -48,6 +48,8 @@ class PageInventory:
     fields: tuple[FieldInfo, ...]
     buttons: tuple[str, ...]
     table_headers: tuple[tuple[str, ...], ...]
+    sections: tuple[str, ...] = ()
+    forms: tuple[tuple[str, ...], ...] = ()
 
 
 class AkkpsBrowserOperator:
@@ -130,7 +132,12 @@ class AkkpsBrowserOperator:
             .filter(visible).map(e => clean(e.innerText || e.value || e.getAttribute('aria-label'))).filter(Boolean).slice(0, 100);
           const tables = [...document.querySelectorAll('table')].filter(visible).slice(0, 30)
             .map(t => [...t.querySelectorAll('thead th')].map(th => clean(th.innerText)).filter(Boolean));
-          return {url: location.href, title: document.title, links, fields, buttons, tables};
+          const sections = [...document.querySelectorAll('h1,h2,h3,[role=heading],nav a,aside a')]
+            .filter(visible).map(e => clean(e.innerText)).filter(Boolean).slice(0, 120);
+          const forms = [...document.querySelectorAll('form')].filter(visible).slice(0, 30)
+            .map(f => [...f.querySelectorAll('button[type=submit],input[type=submit]')]
+              .filter(visible).map(e => clean(e.innerText || e.value || e.getAttribute('aria-label'))).filter(Boolean));
+          return {url: location.href, title: document.title, links, fields, buttons, tables, sections, forms};
         }""")
         validate_akkps_url(data["url"])
         safe_fields = []
@@ -149,6 +156,7 @@ class AkkpsBrowserOperator:
             url=data["url"], title=data["title"],
             links=tuple(data["links"]), fields=tuple(safe_fields),
             buttons=tuple(data["buttons"]), table_headers=tuple(tuple(x) for x in data["tables"]),
+            sections=tuple(data.get("sections", ())), forms=tuple(tuple(x) for x in data.get("forms", ())),
         )
 
     def fill_exact_label(self, label: str, value: str):
