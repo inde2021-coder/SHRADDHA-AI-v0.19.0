@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.operator
 
 import android.content.Context
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -38,7 +39,7 @@ data class CommandTaskPlan(
  * side effect. This prevents blind duplicate sends/submits after a timeout or process death.
  */
 class CommandExecutionJournal(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val store = EncryptedFeatureStore(context.applicationContext)
 
     @Synchronized
     fun createPlan(command: String, steps: List<CommandTaskStep>): CommandTaskPlan? {
@@ -149,7 +150,7 @@ class CommandExecutionJournal(context: Context) {
     }
 
     private fun loadAll(): List<CommandTaskPlan> {
-        val raw = prefs.getString(KEY_PLANS, null) ?: return emptyList()
+        val raw = store.get(KEY_PLANS).getOrThrow().takeIf { it.isNotBlank() } ?: return emptyList()
         val array = try {
             JSONArray(raw)
         } catch (error: Exception) {
@@ -186,7 +187,7 @@ class CommandExecutionJournal(context: Context) {
         }
         if (all.none { it.id == plan.id }) return false
         // Synchronous commit makes each state transition durable before the caller proceeds.
-        return prefs.edit().putString(KEY_PLANS, encoded).commit()
+        return store.put(KEY_PLANS, encoded).isSuccess
     }
 
     private fun encode(plan: CommandTaskPlan) = JSONObject()
@@ -239,13 +240,12 @@ class CommandExecutionJournal(context: Context) {
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
     companion object {
-        private const val PREFS = "shraddha_command_execution_journal"
-        private const val KEY_PLANS = "plans_v1"
+        private const val KEY_PLANS = "command_execution_journal_plans_v1"
         private const val MAX_COMMAND_CHARS = 4_000
         private const val DEDUP_WINDOW_MS = 5 * 60 * 1000L
         private const val MAX_STEPS = 50
         private const val MAX_PLANS = 100
-        private const val MAX_STORAGE_CHARS = 256_000
+        private const val MAX_STORAGE_CHARS = 90_000
     }
 }
 
