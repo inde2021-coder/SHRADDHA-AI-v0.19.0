@@ -994,9 +994,11 @@ class AkkpsBrowserOperator:
           return {count: paths.length, paths};
         }""")
         paths = data.get("paths", []) if isinstance(data, dict) else []
-        if not paths:
-            return None, 0
+        if not paths or len(paths) > 80:
+            return None, len(paths)
         canonical = json.dumps(paths, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if len(canonical) > 200_000:
+            return None, len(paths)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), len(paths)
     def upload_boundary_kml_after_confirmation(self, upload_button_label: str):
         """Use one explicit non-submit Plot boundary Upload button and require a server record ID."""
