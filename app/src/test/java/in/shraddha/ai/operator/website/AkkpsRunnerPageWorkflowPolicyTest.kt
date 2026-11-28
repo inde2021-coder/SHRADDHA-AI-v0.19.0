@@ -6,6 +6,24 @@ import org.junit.Test
 
 class AkkpsRunnerPageWorkflowPolicyTest {
     @Test
+    fun parsesPlotIdAndBoundaryVoiceActions() {
+        assertEquals("PLOT-123", AkkpsRunnerPageWorkflowPolicy.plotId("set plot id PLOT-123"))
+        assertEquals("PLOT_44", AkkpsRunnerPageWorkflowPolicy.plotId("प्लॉट आईडी PLOT_44"))
+        assertNull(AkkpsRunnerPageWorkflowPolicy.plotId("set plot id PLOT/123"))
+        assertEquals(AkkpsBoundaryVoiceAction.INSPECT_MAP, AkkpsRunnerPageWorkflowPolicy.boundaryAction("inspect live map"))
+        assertEquals(AkkpsBoundaryVoiceAction.VERIFY_UPLOAD, AkkpsRunnerPageWorkflowPolicy.boundaryAction("verify boundary upload"))
+        assertEquals(AkkpsBoundaryVoiceAction.PREPARE_UPLOAD, AkkpsRunnerPageWorkflowPolicy.boundaryAction("prepare boundary for upload"))
+        assertEquals(AkkpsBoundaryVoiceAction.IMPORT_SATELLITE, AkkpsRunnerPageWorkflowPolicy.boundaryAction("import satellite candidate"))
+        assertEquals(AkkpsBoundaryVoiceAction.START_GPS_WALK, AkkpsRunnerPageWorkflowPolicy.boundaryAction("start gps walk"))
+        assertEquals(AkkpsBoundaryVoiceAction.STOP_GPS_WALK, AkkpsRunnerPageWorkflowPolicy.boundaryAction("stop gps walk"))
+        assertEquals(AkkpsBoundaryVoiceAction.SAVE_LOCAL, AkkpsRunnerPageWorkflowPolicy.boundaryAction("save local boundary"))
+        assertEquals(AkkpsBoundaryVoiceAction.REOPEN_LOCAL, AkkpsRunnerPageWorkflowPolicy.boundaryAction("reopen saved boundary"))
+        assertEquals(AkkpsBoundaryVoiceAction.IMPORT_KML, AkkpsRunnerPageWorkflowPolicy.boundaryAction("import boundary kml"))
+        assertEquals(AkkpsBoundaryVoiceAction.EXPORT_KML, AkkpsRunnerPageWorkflowPolicy.boundaryAction("export boundary kml"))
+        assertNull(AkkpsRunnerPageWorkflowPolicy.boundaryAction("delete boundary"))
+    }
+
+    @Test
     fun parsesOnlyExplicitRepeatedAwdRowCommands() {
         assertEquals("drying event dates", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("add drying event"))
         assertEquals("re-flooding dates", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("add another re-flooding date"))
