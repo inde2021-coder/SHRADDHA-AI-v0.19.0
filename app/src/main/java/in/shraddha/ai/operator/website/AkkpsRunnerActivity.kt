@@ -1537,7 +1537,7 @@ class AkkpsRunnerActivity : Activity() {
                   const plotId=parsed?.plotId||data?.plotId||parsed?.plot?.id||data?.plot?.id||'';
                   const state=String(parsed?.status||data?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||data?.message||'').slice(0,160);
-                  const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary)\b/i.test(path);
+                  const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary|map|maps|kml)\b/i.test(path);
                   const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||data?.success===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
