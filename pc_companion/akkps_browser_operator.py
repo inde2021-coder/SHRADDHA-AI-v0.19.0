@@ -546,6 +546,8 @@ class AkkpsBrowserOperator:
         if not add_button_label or len(add_button_label) > 80 or SENSITIVE_LABEL.search(add_button_label):
             raise ValueError("A safe, exact visible Add-row label is required.")
         validate_runner_url(self.page.url)
+        if not urlparse(self.page.url).path.casefold().startswith("/runner/awd-reports"):
+            raise RuntimeError("Repeated AWD rows are available only on an AWD Reports page.")
         forms = self.page.locator("form:visible")
         if forms.count() != 1:
             raise RuntimeError("Expected exactly one visible AWD form.")
@@ -556,6 +558,8 @@ class AkkpsBrowserOperator:
         add = form.get_by_role("button", name=add_button_label, exact=True)
         if add.count() != 1 or not add.first.is_visible() or not add.first.is_enabled():
             raise RuntimeError("The exact Add-row control is missing, ambiguous or disabled.")
+        if (add.first.get_attribute("type") or "").casefold() != "button":
+            raise RuntimeError("Add-row control is not explicitly type=button; refusing a possible form submit.")
         before = form.locator("input,select,textarea").count()
         add.first.click()
         self.page.wait_for_timeout(250)
