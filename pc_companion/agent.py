@@ -1314,8 +1314,9 @@ class PcCompanionApp:
         return json.dumps({
             "title": inventory.title, "url": inventory.url,
             "navigation": list(inventory.links), "fields": [f.__dict__ for f in inventory.fields],
-            "buttons": list(inventory.buttons), "table_headers": [list(x) for x in inventory.table_headers]
-        }, ensure_ascii=False)[:10000]
+            "buttons": list(inventory.buttons), "table_headers": [list(x) for x in inventory.table_headers],
+            "sections": list(inventory.sections), "forms": [list(x) for x in inventory.forms]
+        }, ensure_ascii=False)[:12000]
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [
