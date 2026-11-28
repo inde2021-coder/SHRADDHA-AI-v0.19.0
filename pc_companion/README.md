@@ -31,7 +31,31 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
 - Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; the Windows companion persists the bounded receipt ledger so restarting the app does not immediately reopen replay of accepted actions. If receipt persistence fails, the remote action is rejected. Encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
-- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
+- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.
+- The companion does not capture microphone audio, read files, or silently send messages.
+
+## Offline Language Lab (optional)
+
+Open **Offline Language Lab** in the Windows companion to use locally installed models for speech-to-text, translation, or consented reference-voice synthesis. This is a separate optional environment; it is not installed into the default companion EXE and does not add model weights to the Android APK.
+
+Install only on a PC that will run the models:
+
+```powershell
+py -3.12 -m venv .venv-language
+.\.venv-language\Scripts\Activate.ps1
+py -m pip install -r pc_companion/requirements-language.txt
+```
+
+Configure local model paths before use. The ASR adapter currently allows Hindi, Marathi and English only. Translation allows Hindi, English and Marathi. IndicF5 synthesis allows Hindi and Marathi only and requires explicit permission from the reference-voice owner plus the exact reference transcript. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
+
+Set model paths locally before starting the companion (never paste private model paths into a public issue):
+
+- `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_EN`: local Sherpa-ONNX model files.
+- `SHRADDHA_ASR_TOKENS_INDIC` and `SHRADDHA_ASR_TOKENS_EN`: matching local token files.
+- `SHRADDHA_TRANSLATION_MODEL_DIR`: local IndicTrans2 checkpoint directory.
+- IndicF5 weights must already exist in the local Hugging Face cache; runtime network downloads are disabled.
+
+The optional lab's Python unit tests are included in the PC test suite. A successful unit test does not prove that a user's GPU, model files, microphone or speaker produce acceptable inference; validate each installed model locally before relying on it.
 
 ## Offline Language Lab (optional)
 
