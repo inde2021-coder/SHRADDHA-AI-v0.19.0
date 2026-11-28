@@ -83,10 +83,10 @@ class CurriculumProgressStoreInstrumentedTest {
     @Test fun tamperedEncryptedProgressFailsClosedInsteadOfResettingProgress() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
-        store.setDailyLimit(60)
         val prefs = context.getSharedPreferences("shraddha_curriculum_progress_v1", Context.MODE_PRIVATE)
-        assertTrue(prefs.contains("encrypted_state"))
         val previous = prefs.getString("encrypted_state", null)
+        store.setDailyLimit(60)
+        assertTrue(prefs.contains("encrypted_state"))
 
         try {
             // Valid Base64 length, but not a valid AES-GCM record.
