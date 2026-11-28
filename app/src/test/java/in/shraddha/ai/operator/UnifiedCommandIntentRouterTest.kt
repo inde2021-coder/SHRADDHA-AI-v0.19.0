@@ -9,7 +9,7 @@ class UnifiedCommandIntentRouterTest {
         assertEquals(UnifiedCommandDomain.AKKPS, result.domain)
         assertEquals(UnifiedCommandAction.SUBMIT, result.action)
         assertFalse(result.needsClarification)
-        assertFalse(result.requiresHighImpactApproval)
+        assertTrue(result.requiresHighImpactApproval)
         assertEquals("AKKPS में किसान का रिकॉर्ड submit करो", result.originalCommand)
     }
 
@@ -58,6 +58,15 @@ class UnifiedCommandIntentRouterTest {
 
         val pay = UnifiedCommandIntentRouter.classify("pay this invoice from phone")
         assertTrue(pay.requiresHighImpactApproval)
+
+        val send = UnifiedCommandIntentRouter.classify("send WhatsApp message")
+        assertTrue(send.requiresHighImpactApproval)
+
+        val call = UnifiedCommandIntentRouter.classify("call on WhatsApp")
+        assertTrue(call.requiresHighImpactApproval)
+
+        val share = UnifiedCommandIntentRouter.classify("share this file on PC")
+        assertTrue(share.requiresHighImpactApproval)
     }
 
     @Test fun emptyAndOversizedCommandsRemainUnknown() {
