@@ -45,7 +45,10 @@ class TaskPlannerOperatorBridge(
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
             validateOperatorStep(action.step)
-            val safety = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value, action.step.expectedVisibleText)
+            val safety = OperatorSafetyPolicy.assess(
+                action.step.action.name, action.step.target, action.step.value,
+                action.step.expectedVisibleText, action.step.explicitlyAuthorizedByUser
+            )
             require(safety.risk != OperatorSafetyPolicy.Risk.BLOCK) {
                 "Operator plan contains an action blocked by safety policy: ${safety.reason}"
             }
