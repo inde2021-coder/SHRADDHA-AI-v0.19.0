@@ -1079,20 +1079,23 @@ class AkkpsRunnerActivity : Activity() {
                               if (maps.length !== 1) return JSON.stringify({
                                 ok:false, reason:'expected_one_visible_map', mapCount:maps.length
                               });
-                              const matches = [...maps[0].querySelectorAll('button,[role=button]')]
+                              const matches = [...maps[0].querySelectorAll('button,[role=button],a[title],a[aria-label]')]
                                 .filter(visible).filter(e => {
                                   const text = String(e.innerText || e.getAttribute('aria-label') ||
                                     e.getAttribute('title') || '').replace(/\\s+/g,' ').trim();
                                   return text === label;
                                 });
                               if (matches.length !== 1) return JSON.stringify({
-                                ok:false, reason:'button_missing_or_ambiguous', count:matches.length
+                                ok:false, reason:'control_missing_or_ambiguous', count:matches.length
                               });
                               const button = matches[0];
+                              if (button.tagName.toLowerCase() === 'a' &&
+                                  !['','#'].includes(String(button.getAttribute('href') || '').trim().toLowerCase()))
+                                return JSON.stringify({ok:false,reason:'map_link_navigation_blocked'});
                               if (button.disabled || ['submit','reset'].includes(
                                 String(button.type || '').toLowerCase())) return JSON.stringify({
-                                  ok:false, reason:'disabled_or_submit_control'
-                                });
+                                ok:false, reason:'disabled_or_submit_control'
+                              });
                               const before = {
                                 pressed:button.getAttribute('aria-pressed'),
                                 checked:button.getAttribute('aria-checked'),
