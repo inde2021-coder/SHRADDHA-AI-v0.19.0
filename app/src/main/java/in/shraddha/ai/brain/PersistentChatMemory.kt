@@ -39,11 +39,14 @@ object PersistentChatMemory {
                     "Conversation memory was cleared, but its revocation marker could not be finalized."
                 }
             } else {
-                // Complete any interrupted revocation before consent can be enabled again.
-                if (prefs.getBoolean(CLEAR_PENDING_KEY, false)) {
+                // A fresh opt-in must not resurrect recap content retained by an older build
+                // that only hid memory on opt-out. Clear before re-enabling from a disabled state.
+                if (prefs.getBoolean(CLEAR_PENDING_KEY, false) || !prefs.getBoolean(ENABLED_KEY, false)) {
                     check(vault.clear()) {
                         "Previous conversation-memory deletion is still pending; memory cannot be re-enabled."
                     }
+                }
+                if (prefs.getBoolean(CLEAR_PENDING_KEY, false)) {
                     check(prefs.edit().remove(CLEAR_PENDING_KEY).commit()) {
                         "Could not finalize previous conversation-memory deletion."
                     }
