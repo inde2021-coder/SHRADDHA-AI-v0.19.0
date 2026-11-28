@@ -276,9 +276,11 @@ class CurriculumProgressStore(context: Context) {
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-            iv = cipher.iv
-            encrypted = cipher.doFinal(clear)
-            combined = iv + encrypted
+            val nonce = cipher.iv
+            val sealed = cipher.doFinal(clear)
+            iv = nonce
+            encrypted = sealed
+            combined = nonce + sealed
             check(prefs.edit().putString(ENCRYPTED_STATE, Base64.encodeToString(combined, Base64.NO_WRAP)).commit()) {
                 "Could not save encrypted learning progress."
             }
