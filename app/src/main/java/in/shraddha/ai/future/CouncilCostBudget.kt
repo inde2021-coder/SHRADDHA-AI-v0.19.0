@@ -39,6 +39,43 @@ object CouncilCostBudget {
             .putFloat(KEY_LIMIT, monthlyLimitUsd.toFloat()).putString(KEY_PRICES, parsed.toString()).apply()
     }
 
+    /** Fail closed before dispatch when the configured monthly ceiling is already reached. */
+    @Synchronized
+    fun ensureBudgetAllowsCall(context: Context, provider: String) {
+        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val limit = p.getFloat(KEY_LIMIT, 0f).toDouble()
+        if (limit <= 0.0) return
+        val month = YearMonth.now(ZoneOffset.UTC).toString()
+        if (p.getString(KEY_MONTH, null) != month) {
+            check(p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f)
+                .putBoolean(KEY_UNKNOWN, false).commit()) { "Could not initialize monthly API budget state." }
+        }
+        check(!p.getBoolean(KEY_UNKNOWN, false)) {
+            "Monthly API budget is paused because earlier provider usage could not be priced. Review model pricing before another cloud call."
+        }
+        val spent = p.getFloat(KEY_SPEND, 0f).toDouble()
+        check(spent < limit) {
+            "Monthly API budget reached: estimated spend USD $spent is at or above configured limit USD $limit."
+        }
+        val prices = JSONArray(p.getString(KEY_PRICES, "[]") ?: "[]")
+        val hasProviderPrice = (0 until prices.length()).any { index ->
+            prices.getJSONObject(index).optString("provider").equals(provider, true)
+        }
+        check(hasProviderPrice) {
+            "Monthly API budget is enabled, but no model price is configured for $provider. Add the provider's exact model rates in Settings before sending a request."
+        }
+    }
+
+    /** Live voice and streamed requests without reliable token counters cannot run under a hard spend ceiling. */
+    fun requireUsageCountersAvailable(context: Context, feature: String) {
+        val limit = settings(context).monthlyLimitUsd
+        if (limit > 0.0) {
+            throw IllegalStateException(
+                "Monthly API spend limit is enabled, but $feature does not expose reliable provider token usage. Disable the spend limit or use a metered text request."
+            )
+        }
+    }
+
     @Synchronized
     fun recordUsageAndEnforce(context: Context, usage: com.Lia.assistant.voice.ProviderTokenUsage) {
         val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
