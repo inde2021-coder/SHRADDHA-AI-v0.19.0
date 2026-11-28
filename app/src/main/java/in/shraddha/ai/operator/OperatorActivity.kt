@@ -376,9 +376,10 @@ class OperatorActivity : Activity() {
             if (target.length > 120 || value.length > 500 || expected.length > 120) continue
             if (action == OperatorActionType.OPEN_APP && target.isBlank()) continue
             if (action == OperatorActionType.CLICK_TEXT && target.isBlank()) continue
-            if (action == OperatorActionType.TYPE_TEXT && (value.isBlank() || target.isNotBlank())) continue
-            if (action !in setOf(OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT) && (target.isNotBlank() || value.isNotBlank())) continue
-            val risk = if (action in setOf(OperatorActionType.OPEN_APP, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD)) Risk.READ_ONLY else Risk.SENSITIVE
+            if (action == OperatorActionType.SELECT_FILE && (target.isBlank() || value.isNotBlank())) continue
+            if (action == OperatorActionType.TYPE_TEXT && (value.isBlank() || target.isBlank())) continue
+            if (action !in setOf(OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT, OperatorActionType.SELECT_FILE) && (target.isNotBlank() || value.isNotBlank())) continue
+            val risk = if (action in setOf(OperatorActionType.OPEN_APP, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD)) Risk.READ_ONLY else Risk.SENSITIVE
             planned += PlannedOperatorAction(
                 id, title, OperatorStep(action, target, value, expected, requiresConfirmation = true),
                 dependsOn = previous?.let { setOf(it) } ?: emptySet(),
@@ -645,12 +646,14 @@ class OperatorActivity : Activity() {
                 }
         }
         val system = """You are Shraddha AI's Universal Command Planner. Convert one new Hindi/English/Hinglish user command into a short, ordered plan for the CURRENT visible Android UI.
-Return JSON only: {"steps":[{"action":"OPEN_APP|CLICK_TEXT|TYPE_TEXT|BACK|HOME|SCROLL_FORWARD","target":"exact visible label, app name, or editable field label","value":"literal user-provided text only","expectedVisibleText":"observable postcondition text"}]}.
+Return JSON only: {"steps":[{"action":"OPEN_APP|CLICK_TEXT|TYPE_TEXT|SELECT_FILE|BACK|HOME|SCROLL_FORWARD|SCROLL_BACKWARD","target":"exact visible label, app name, or editable field label","value":"literal user-provided text only","expectedVisibleText":"observable postcondition text"}]}.
 Rules:
-- Use only the six listed actions. Never invent an API, hidden endpoint, coordinate, shell command, password, OTP, PIN, or field value.
+- Use only the eight listed actions. Never invent an API, hidden endpoint, coordinate, shell command, password, OTP, PIN, or field value.
 - OPEN_APP target must be the app explicitly named by the user.
 - CLICK_TEXT targets must be exact visible labels now, or a label that will be re-observed after a prior app/navigation transition. Never use coordinates.
 - TYPE_TEXT target must be a visible editable field now, or one expected after a prior transition. Its value must be copied exactly from the user's command; do not infer personal data.
+- SELECT_FILE target must be the exact file name explicitly mentioned by the user; the file picker adapter re-observes the live picker and never guesses another file.
+- SCROLL_BACKWARD may be used only when the visible page is scrollable; it is re-observed after dispatch.
 - Prefer a short sequence (maximum 8 steps). The executor re-observes the screen and re-resolves each target before dispatch.
 - Include expectedVisibleText for meaningful state changes. For a Like action use the resulting Unlike/Unlike button state; for a follow action use Following; for a comment use the exact comment; for a message send use the exact message body.
 - Never send, publish, delete, pay, purchase, or submit unless the user explicitly requested that exact side effect.
