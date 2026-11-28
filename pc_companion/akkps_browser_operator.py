@@ -535,8 +535,9 @@ class AkkpsBrowserOperator:
         section_label = " ".join(str(section_label or "").split())
         add_button_label = " ".join(str(add_button_label or "").split())
         allowed_sections = {
-            "drying events", "drying event dates", "re-flooding events",
-            "reflooding dates", "fertilizer applications", "field visits",
+            "drying events", "drying event", "drying event dates", "drying dates",
+            "re-flooding events", "re-flooding dates", "reflooding dates",
+            "fertilizer applications", "fertilizer application dates", "field visits",
             "historical yields", "water level readings"
         }
         normalized = section_label.casefold()
@@ -629,8 +630,13 @@ class AkkpsBrowserOperator:
         accept = (target.get_attribute("accept") or "").casefold()
         extension_mime = {".pdf": "application/pdf", ".jpg": "image/jpeg",
                           ".jpeg": "image/jpeg", ".png": "image/png"}
-        if accept and not any(token.strip() in {path.suffix.casefold(), extension_mime[path.suffix.casefold()]}
-                              for token in accept.split(",")):
+        accepted = [token.strip() for token in accept.split(",") if token.strip()]
+        suffix = path.suffix.casefold()
+        mime = extension_mime[suffix]
+        if accepted and not any(
+            token in {suffix, mime} or (token == "image/*" and mime.startswith("image/"))
+            for token in accepted
+        ):
             raise ValueError("Selected document type is not allowed by this upload field.")
         target.set_input_files(str(path))
         count = target.evaluate("(e) => e.files ? e.files.length : 0")
