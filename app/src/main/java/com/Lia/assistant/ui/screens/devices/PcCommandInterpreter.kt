@@ -13,7 +13,8 @@ object PcCommandInterpreter {
         val lower = command.lowercase()
 
         val akkpsModules = mapOf(
-            "open akkps farmers" to "farmers", "open akkps plots" to "plots",
+            "open akkps farmers" to "farmers", "open akkps farmer" to "farmers",
+            "open akkps plots" to "plots", "open akkps plot" to "plots",
             "open akkps awd reports" to "awd reports", "open akkps profile" to "profile",
             "open akkps data sync" to "data sync", "akkps किसान खोलो" to "farmers",
             "akkps प्लॉट खोलो" to "plots", "akkps एडब्ल्यूडी रिपोर्ट खोलो" to "awd reports"
