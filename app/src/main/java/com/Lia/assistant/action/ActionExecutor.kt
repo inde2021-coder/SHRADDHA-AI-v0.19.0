@@ -34,6 +34,24 @@ object ActionExecutor {
         when (toolName) {
 
 
+            "inspect_akkps_runner" -> {
+                val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
+                    .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_INSPECT, true)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "akkps_runner_inspection_started")
+                    .put("message", "AKKPS Runner खुल गया है। Login आप स्वयं करें; authenticated Runner page load होने पर safe module/form inventory अपने आप capture होगी।")
+            }
+
+            "get_akkps_runner_inventory" -> {
+                val inventory = `in`.shraddha.ai.operator.website.AkkpsPageInventory.last(context)
+                    ?: return result.put("status", "needs_user_action").put("message", "अभी AKKPS Runner inventory उपलब्ध नहीं है। पहले inspect_akkps_runner चलाएँ और वेबसाइट में स्वयं Login करें।")
+                result.put("status", "success")
+                    .put("inventory", inventory)
+                    .put("summary", `in`.shraddha.ai.operator.website.AkkpsPageInventory.summary(inventory))
+                    .put("message", "यह केवल safe page structure है; farmer rows, form values, cookies और credentials इसमें शामिल नहीं हैं।")
+            }
+
             "open_akkps_runner" -> {
                 val command = args.optString("command").trim()
                 if (command.length > 3000) return result.put("status", "error").put("message", "AKKPS command अधिकतम 3000 characters की हो सकती है।")
