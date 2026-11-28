@@ -45,7 +45,14 @@ py -3.12 -m venv .venv-language
 py -m pip install -r pc_companion/requirements-language.txt
 ```
 
-Configure local model paths before use. The ASR adapter currently allows Hindi, Marathi and English only. Translation allows Hindi, English and Marathi. IndicF5 synthesis allows Hindi and Marathi only and requires explicit permission from the reference-voice owner plus the exact reference transcript. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
+Configure local model paths before use. The ASR adapter currently allows Hindi, Marathi and English only. Translation allows Hindi, English and Marathi. IndicF5 synthesis allows Hindi and Marathi only and requires explicit permission from the reference-voice owner plus the exact reference transcript.
+
+Set model paths locally before starting the companion (never paste private model paths into a public issue):
+
+- `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_EN`: local Sherpa-ONNX model files.
+- `SHRADDHA_ASR_TOKENS_INDIC` and `SHRADDHA_ASR_TOKENS_EN`: matching local token files.
+- `SHRADDHA_TRANSLATION_MODEL_DIR`: local IndicTrans2 checkpoint directory.
+- IndicF5 weights must already exist in the local Hugging Face cache; runtime network downloads are disabled. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
 
 The optional lab's Python unit tests are included in the PC test suite. A successful unit test does not prove that a user's GPU, model files, microphone or speaker produce acceptable inference; validate each installed model locally before relying on it.
 
