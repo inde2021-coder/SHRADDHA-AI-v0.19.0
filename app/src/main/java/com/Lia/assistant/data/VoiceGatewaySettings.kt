@@ -289,6 +289,9 @@ object VoiceGatewaySettings {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            // Consent may be revoked while the one-use token request is in flight.
+            // Discard the token before it can start a new microphone/WebSocket session.
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw IllegalStateException(message.ifBlank { "Gemini Live token request failed (HTTP ${response.code})" })
