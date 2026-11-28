@@ -137,6 +137,8 @@ class AkkpsRunnerActivity : Activity() {
         })
         pendingAiCommand = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()?.takeIf { it.isNotBlank() && it.length <= 3000 }
         pendingInspectOnLoad = intent.getBooleanExtra(EXTRA_RUNNER_INSPECT, false)
+        intent.removeExtra(EXTRA_RUNNER_COMMAND)
+        intent.removeExtra(EXTRA_RUNNER_INSPECT)
         command = EditText(this).apply {
             hint = "एक कमांड: name=Ram; village=Rampur; phone=...; submit"
             setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
