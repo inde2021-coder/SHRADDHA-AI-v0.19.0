@@ -92,8 +92,17 @@ object IndicConformerRuntime {
         require(isSha256(expectedSha)) { "A pinned SHA-256 digest is required." }
         val partial = File(destination.parentFile, destination.name + ".part")
         val backup = File(destination.parentFile, destination.name + ".bak")
+        // Recover an interrupted replacement before cleaning any temporary files. If the
+        // previous install moved the valid model to .bak but failed before installing the
+        // new one, never delete that only remaining verified copy.
+        if (backup.exists()) {
+            if (destination.exists()) {
+                check(backup.delete()) { "Could not clear a stale model backup." }
+            } else {
+                check(backup.renameTo(destination)) { "Could not restore the previous verified model." }
+            }
+        }
         check(!partial.exists() || partial.delete()) { "Could not clear an interrupted model download." }
-        check(!backup.exists() || backup.delete()) { "Could not clear a stale model backup." }
         try {
             val request = Request.Builder().url(url).get().header("User-Agent", "ShraddhaAI-Offline-ASR").build()
             http.newCall(request).execute().use { response ->
