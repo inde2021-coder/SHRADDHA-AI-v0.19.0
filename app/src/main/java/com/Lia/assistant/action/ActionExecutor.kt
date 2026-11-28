@@ -256,12 +256,12 @@ object ActionExecutor {
             }
             "open_app" -> {
                 val requestedApp = args.optString("app_name", "").trim()
-                val appName = if (requestedApp.isNotBlank()) requestedApp else when (
-                    val followUp = CommandFollowUpContextRuntime.resolve("same app", CommandReferenceType.APP)
-                ) {
-                    is CommandReferenceResolution.Resolved -> followUp.reference.stableId
-                    else -> ""
-                }
+                val appName = if (requestedApp.isNotBlank()) {
+                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedApp, CommandReferenceType.APP)) {
+                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
+                        else -> requestedApp
+                    }
+                } else ""
                 if (appName.isEmpty()) {
                     result.put("status", "error")
                     result.put("message", "App name cannot be empty")
@@ -274,7 +274,7 @@ object ActionExecutor {
                 if (packageName != null) {
                     val launched = AppLauncher.launch(context, packageName)
                     if (launched) {
-                        CommandFollowUpContextRuntime.remember(CommandReferenceType.APP, packageName, apps.firstOrNull { it.packageName == packageName }?.label ?: appName)
+                        CommandFollowUpContextRuntime.remember(CommandReferenceType.APP, packageName, appName)
                         result.put("status", "success")
                         result.put("action", "app_opened")
                         result.put("package", packageName)
@@ -291,8 +291,8 @@ object ActionExecutor {
 
             "call_contact" -> {
                 val requestedContact = args.optString("contact_name", "").trim()
-                val query = if (requestedContact.isBlank() || requestedContact in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
-                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContact.ifBlank { "उसे" }, CommandReferenceType.CONTACT)) {
+                val query = if (requestedContact in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
+                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContact, CommandReferenceType.CONTACT)) {
                         is CommandReferenceResolution.Resolved -> followUp.reference.stableId
                         else -> requestedContact
                     }
@@ -338,8 +338,8 @@ object ActionExecutor {
 
             "message_contact" -> {
                 val requestedContactName = args.optString("contact_name", "").trim()
-                val contactName = if (requestedContactName.isBlank() || requestedContactName in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
-                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContactName.ifBlank { "उसे" }, CommandReferenceType.CONTACT)) {
+                val contactName = if (requestedContactName in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
+                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContactName, CommandReferenceType.CONTACT)) {
                         is CommandReferenceResolution.Resolved -> followUp.reference.stableId
                         else -> requestedContactName
                     }
