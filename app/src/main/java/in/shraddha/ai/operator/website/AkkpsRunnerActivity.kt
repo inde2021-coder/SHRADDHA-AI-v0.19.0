@@ -1482,8 +1482,12 @@ Return exact JSON only. Do not include prose or markdown."""
                 if(actual!==String(item.value)&&optionText!==wanted)
                   return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const submitControls=[...f.querySelectorAll('button:not([type]),button[type=submit],input[type=submit]')]
-                .filter(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
+              const finalSubmitLabels=new Set(['submit','submit report','submit plot','submit registration',
+                'submit farmer','submit awd report','जमा करें','सबमिट','सबमिट करें','भेजें']);
+              const submitControls=[...f.querySelectorAll('button,input[type=submit],[role=button]')]
+                .filter(x=>!x.disabled&&x.getAttribute('aria-disabled')!=='true'&&x.getClientRects().length&&
+                  getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none')
+                .filter(x=>finalSubmitLabels.has(norm(x.innerText||x.value||x.getAttribute('aria-label')||x.title)));
               if(submitControls.length!==1) return JSON.stringify({status:'submit_control_not_unique'});
               submitControls[0].click();
               return JSON.stringify({status:'dispatched',eventStart});
