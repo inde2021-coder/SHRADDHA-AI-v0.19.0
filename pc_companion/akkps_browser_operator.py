@@ -154,6 +154,9 @@ class AkkpsBrowserOperator:
         wanted = " ".join(str(label).casefold().split())
         if not wanted or not isinstance(value, str):
             raise ValueError("A field label and text value are required.")
+        visible_forms = self.page.locator("form:visible")
+        if visible_forms.count() != 1:
+            raise RuntimeError(f"Expected exactly one visible form; found {visible_forms.count()}.")
         matches = self.page.get_by_label(label, exact=True)
         count = matches.count()
         if count != 1:
@@ -176,12 +179,15 @@ class AkkpsBrowserOperator:
     def preview(self, values: dict[str, str]):
         """Validate proposed fields and return a preview without changing the website."""
         inventory = self.inventory()
-        by_label = {f.label.casefold(): f for f in inventory.fields}
+        grouped = {}
+        for field in inventory.fields:
+            grouped.setdefault(field.label.casefold(), []).append(field)
         preview = []
         for label, value in values.items():
-            field = by_label.get(" ".join(str(label).casefold().split()))
-            if not field:
-                raise RuntimeError(f"Field {label!r} is not uniquely present in the current page inventory.")
+            matches = grouped.get(" ".join(str(label).casefold().split()), [])
+            if len(matches) != 1:
+                raise RuntimeError(f"Field {label!r} is missing or ambiguous in the current page inventory.")
+            field = matches[0]
             if field.disabled:
                 raise RuntimeError(f"Field {label!r} is disabled.")
             preview.append({"field": field.label, "value": str(value), "required": field.required})
