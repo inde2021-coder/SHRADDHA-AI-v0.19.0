@@ -72,17 +72,27 @@ object AkkpsRunnerPageWorkflowPolicy {
 
     fun autocompleteRequest(command: String): AkkpsAutocompleteRequest? {
         val value = command.trim()
-        val patterns = listOf(
+        val prefixPatterns = listOf(
             Regex("(?i)^(?:select|choose|pick|चुनें|चुनो)\\s+(village|गाँव|गांव)\\s+(.+)$") to "Village",
             Regex("(?i)^(?:select|choose|pick|चुनें|चुनो)\\s+(rice variety|variety|धान की किस्म|चावल की किस्म)\\s+(.+)$") to "Rice Variety",
             Regex("(?i)^(?:select|choose|pick|चुनें|चुनो)\\s+(linked farmer|farmer|किसान)\\s+(.+)$") to "Linked Farmer",
             Regex("(?i)^(?:select|choose|pick|चुनें|चुनो)\\s+(linked plot|plot|खेत|प्लॉट)\\s+(.+)$") to "Linked Plot"
         )
-        val match = patterns.mapNotNull { (pattern, label) ->
-            pattern.matchEntire(value)?.let { label to it.groupValues[2].trim().trim('"', '\'') }
-        }.singleOrNull() ?: return null
-        if (match.second.isBlank() || match.second.length > 160) return null
-        return AkkpsAutocompleteRequest(match.first, match.second)
+        val suffixPatterns = listOf(
+            Regex("(?i)^(.+)\\s+(?:village|गाँव|गांव)\\s+(?:select|choose|चुनें|चुनो)$") to "Village",
+            Regex("(?i)^(.+)\\s+(?:rice variety|variety|धान की किस्म|चावल की किस्म)\\s+(?:select|choose|चुनें|चुनो)$") to "Rice Variety",
+            Regex("(?i)^(.+)\\s+(?:linked farmer|farmer|किसान)\\s+(?:select|choose|चुनें|चुनो)$") to "Linked Farmer",
+            Regex("(?i)^(.+)\\s+(?:linked plot|plot|खेत|प्लॉट)\\s+(?:select|choose|चुनें|चुनो)$") to "Linked Plot"
+        )
+        val prefix = prefixPatterns.mapNotNull { (pattern, label) ->
+            pattern.matchEntire(value)?.let { AkkpsAutocompleteRequest(label, it.groupValues[2].trim().trim('"', '\'')) }
+        }
+        val suffix = suffixPatterns.mapNotNull { (pattern, label) ->
+            pattern.matchEntire(value)?.let { AkkpsAutocompleteRequest(label, it.groupValues[1].trim().trim('"', '\'')) }
+        }
+        val match = (prefix + suffix).singleOrNull() ?: return null
+        if (match.query.isBlank() || match.query.length > 160) return null
+        return match
     }
 
     fun documentFieldLabel(command: String): String? {
