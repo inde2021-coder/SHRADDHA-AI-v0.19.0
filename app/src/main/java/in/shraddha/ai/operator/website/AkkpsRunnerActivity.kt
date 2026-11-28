@@ -215,6 +215,10 @@ class AkkpsRunnerActivity : Activity() {
             addView(moduleRow)
         }
         root.addView(moduleScroller, LinearLayout.LayoutParams(-1, dp(46)))
+        val documentActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        documentActions.addView(action("Verify Document Upload") { verifyDocumentUploadResponse() },
+            LinearLayout.LayoutParams(0, dp(40), 1f))
+        root.addView(documentActions)
         plotIdInput = EditText(this).apply {
             hint = "AKKPS Plot ID (जैसे PLOT-123)"
             setSingleLine(true); setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
@@ -1255,6 +1259,41 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     /**
+     * Verify an actual document upload response after the user uses AKKPS's own Upload control.
+     * A selected file or a successful form attachment is not treated as a server upload.
+     */
+    private fun verifyDocumentUploadResponse() {
+        if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
+            status.text = "पहले authenticated AKKPS Runner page खोलें।"
+            return
+        }
+        val script = """
+            (() => {
+              const events=Array.isArray(window.__akkpsSubmitEvents)?window.__akkpsSubmitEvents:[];
+              const recent=events.filter(e=>e && e.documentUpload===true &&
+                ['POST','PUT','PATCH'].includes(String(e.method||'').toUpperCase()) &&
+                Number(e.httpStatus)>=200 && Number(e.httpStatus)<300 &&
+                e.success===true && !!String(e.documentId||'').trim() &&
+                Date.now()-Number(e.at||0)<=15*60*1000);
+              const last=recent.sort((a,b)=>Number(b.at)-Number(a.at))[0]||null;
+              return JSON.stringify(last?{
+                verified:true, documentId:String(last.documentId).slice(0,100),
+                path:String(last.path||'').slice(0,160), httpStatus:Number(last.httpStatus)
+              }:{verified:false});
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result?.optBoolean("verified") == true) {
+                status.text = "AKKPS document upload server response verified • Document ID: " +
+                    result.optString("documentId") + " • HTTP " + result.optInt("httpStatus")
+            } else {
+                status.text = "Document picker attachment portal upload नहीं है। पिछले 15 मिनट में explicit success + Document ID वाला upload response नहीं मिला; AKKPS पर manually जाँचें।"
+            }
+        }
+    }
+
+    /**
      * Verify a previously performed portal boundary write from the observer installed
      * on the current authenticated AKKPS page. Missing evidence is explicitly uncertain.
      */
@@ -1550,12 +1589,17 @@ class AkkpsRunnerActivity : Activity() {
                   const state=String(parsed?.status||data?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||data?.message||'').slice(0,160);
                   const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary|map|maps|kml)\b/i.test(path);
-                  const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||data?.success===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
+                  const documentUpload=/\b(document|documents|attachment|attachments|upload|file|files)\b/i.test(path);
+                  const documentId=parsed?.documentId||parsed?.fileId||parsed?.attachmentId||
+                    data?.documentId||data?.fileId||data?.attachmentId||'';
+                  const success=(recordWrite||documentUpload)&&(parsed?.success===true||parsed?.ok===true||data?.success===true||['success','created','saved','uploaded','ok'].includes(state)||/saved successfully|submitted successfully|record created|uploaded successfully/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
                     method:String(method||'').toUpperCase(),
                     path,
                     recordWrite,
+                    documentUpload,
+                    documentId:String(documentId||'').slice(0,100),
                     httpStatus:Number(status)||0,
                     success:!!success,
                     recordId:String(id||'').slice(0,100),
