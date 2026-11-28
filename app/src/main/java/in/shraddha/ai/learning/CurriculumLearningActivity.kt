@@ -48,7 +48,9 @@ class CurriculumLearningActivity : Activity() {
         super.onResume()
         if (!::root.isInitialized) return
         val snapshot = progress.snapshot()
-        learningLocked = snapshot.guardianMode && snapshot.usedTodayMinutes >= snapshot.dailyLimitMinutes
+        learningLocked = snapshot.guardianMode &&
+            snapshot.usedTodayMinutes >= snapshot.dailyLimitMinutes &&
+            snapshot.guardianOverrideUntilMillis <= System.currentTimeMillis()
         if (learningLocked) showDailyLimitDialog()
         else startStudySession()
         refreshDashboard()
@@ -145,7 +147,8 @@ class CurriculumLearningActivity : Activity() {
     private fun refreshDashboard() {
         if (!::dashboard.isInitialized) return
         val s = progress.snapshot()
-        if (s.guardianMode && s.usedTodayMinutes >= s.dailyLimitMinutes && !learningLocked) {
+        if (s.guardianMode && s.usedTodayMinutes >= s.dailyLimitMinutes &&
+            s.guardianOverrideUntilMillis <= System.currentTimeMillis() && !learningLocked) {
             learningLocked = true
             if (sessionStarted) {
                 progress.endSession()
@@ -320,6 +323,7 @@ class CurriculumLearningActivity : Activity() {
             .setView(pin)
             .setPositiveButton("अभिभावक अनुमति") { _, _ ->
                 if (progress.verifyGuardianPin(pin.text.toString().toCharArray())) {
+                    progress.grantGuardianOverride(15)
                     limitDialogVisible = false
                     learningLocked = false
                     startStudySession()
