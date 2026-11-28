@@ -72,8 +72,15 @@ def verified_record_response(method: str, url: str, status: int, payload):
         return None
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     record_id = next((payload.get(key) or data.get(key) for key in
-                      ("recordId", "farmerId", "plotId", "reportId", "id")
+                      ("recordId", "boundaryId", "geometryId", "mapId",
+                       "farmerId", "plotId", "reportId", "id")
                       if payload.get(key) or data.get(key)), None)
+    if not record_id:
+        for parent in (payload.get("boundary"), payload.get("geometry"), payload.get("map"),
+                       data.get("boundary"), data.get("geometry"), data.get("map")):
+            if isinstance(parent, dict) and parent.get("id"):
+                record_id = parent["id"]
+                break
     state = str(payload.get("status") or data.get("status") or "").casefold()
     message = str(payload.get("message") or data.get("message") or "").casefold()
     success = (payload.get("success") is True or payload.get("ok") is True or
