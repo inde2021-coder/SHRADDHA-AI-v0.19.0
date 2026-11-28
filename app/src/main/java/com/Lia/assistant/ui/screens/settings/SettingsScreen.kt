@@ -124,6 +124,7 @@ private fun SettingsScreenContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
+    var allowOnlineAi by remember { mutableStateOf(`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) }
 
     var expandedSettingsGroup by remember { mutableStateOf<String?>(null) }
     var showHomeDesignDialog by remember { mutableStateOf(false) }
@@ -436,6 +437,31 @@ private fun SettingsScreenContent(
                         val nextProvider = providers[(currentIndex + 1) % providers.size]
                         appState.applyAiProvider(context, nextProvider)
                         android.widget.Toast.makeText(context, "AI provider: $nextProvider", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Allow Online AI",
+                    subtitle = "Off by default. When enabled, cloud AI features may send the content required for that feature to your configured provider. This is consent, not a spending cap.",
+                    icon = Icons.Default.Security,
+                    switch = allowOnlineAi,
+                    onCheckedChange = { enabled ->
+                        val saved = `in`.shraddha.ai.future.OnlineAiConsent.setAllowed(context, enabled)
+                        if (saved) {
+                            allowOnlineAi = enabled
+                            if (!enabled) {
+                                // Consent is committed first; then stop active cloud-facing sessions.
+                                com.Lia.assistant.voice.VoiceSessionManager.stop()
+                                com.Lia.assistant.voice.VoiceForegroundService.stop(context)
+                                com.Lia.assistant.voice.ShraddhaSpeechClient.stopPlayback()
+                                `in`.shraddha.ai.link.DeviceLinkManager.cancelAiRequests()
+                                context.stopService(android.content.Intent(context, `in`.shraddha.ai.vision.LiveEyesCameraService::class.java))
+                            }
+                        } else {
+                            android.widget.Toast.makeText(context,
+                                "Online AI consent could not be saved. Previous setting remains active.",
+                                android.widget.Toast.LENGTH_LONG).show()
+                            allowOnlineAi = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
+                        }
                     }
                 )
                 NovaSettingsRow(
