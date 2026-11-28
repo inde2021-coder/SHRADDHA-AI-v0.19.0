@@ -33,6 +33,14 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - PyAutoGUI's top-left fail-safe is enabled.
 - File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
+## AKKPS website operator
+
+Open **AKKPS Website Operator** in the Windows companion to launch a visible Microsoft Edge session for the approved AKKPS portal. Sign in manually in Edge; passwords, OTPs and CAPTCHA answers are never read or stored by Shraddha AI. After login, open Runner and use the allow-listed Farmers, Plots, AWD Reports, Profile and Data Sync module buttons. Inspect shows only safe page structure and field labels. A single exact field can be previewed and filled after local confirmation; Submit requires a separate local confirmation and is never treated as saved until the account owner reopens and verifies the record.
+
+From the paired Android device, voice commands include `Open AKKPS`, `Open AKKPS Runner`, `Inspect AKKPS`, and `Open AKKPS Farmers/Plots/AWD Reports/Profile/Data Sync`. Every remote command requires the existing local PC approval and per-action confirmation. The browser profile stays under the current Windows user's local AppData and must not be copied or uploaded. Only HTTPS on `akkps.ngo` / `www.akkps.ngo` is accepted; the unverified `akps.ngo` lookalike is blocked.
+
+The Android Main Brain also exposes `open_akkps_runner`, `inspect_akkps_runner` and `get_akkps_runner_inventory`. The native Android Runner is the primary form-entry workflow: it supports Farmer/Plot/AWD field mapping, missing-field checks, explicit submit confirmation and server-response verification. No API key or website password is required by the connector; the account owner signs in directly in the website.
+
 ## Offline Language Lab (optional)
 
 Open **Offline Language Lab** in the Windows companion to use locally installed models for speech-to-text, translation, or consented reference-voice synthesis. This is a separate optional environment; it is not installed into the default companion EXE and does not add model weights to the Android APK.
