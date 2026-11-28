@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, FieldInfo, PageInventory, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, _simple_polygon_ring, validate_akkps_url, validate_runner_url, verified_record_response
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, FieldInfo, PageInventory, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, _simple_polygon_ring, _runner_plot_route_id, validate_akkps_url, validate_runner_url, verified_record_response
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -79,6 +79,11 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
         self.assertIsNone(verified_record_response("GET", url, 200, {"success": True, "plotId": "PLOT-101"}))
         self.assertIsNone(verified_record_response("POST", "https://evil.example/api/plots", 201, {"success": True, "plotId": "PLOT-101"}))
         self.assertIsNone(verified_record_response("POST", "https://www.akkps.ngo/api/telemetry", 201, {"success": True, "id": "x"}))
+
+    def test_plot_route_id_is_only_extracted_from_plot_detail_routes(self):
+        self.assertEqual(_runner_plot_route_id("https://www.akkps.ngo/runner/plots/PLOT-101/boundary"), "plot-101")
+        self.assertIsNone(_runner_plot_route_id("https://www.akkps.ngo/runner/plots/create-land-map"))
+        self.assertIsNone(_runner_plot_route_id("https://www.akkps.ngo/runner/plots"))
 
     def test_boundary_response_accepts_boundary_ids_only_with_explicit_success(self):
         url = "https://www.akkps.ngo/api/plots/PLOT-101/boundary"
