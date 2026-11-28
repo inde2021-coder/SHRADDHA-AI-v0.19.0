@@ -32,7 +32,7 @@ object AkkpsRunnerPageWorkflowPolicy {
     )
 
     fun plotId(command: String): String? {
-        val match = Regex("(?i)^(?:set\\s+)?(?:plot\\s+id|प्लॉट\\s+आईडी)\\s*(?:is|to|=|:)?\\s*([A-Za-z0-9_-]{1,80})$").matchEntire(command.trim())
+        val match = Regex("(?i)^(?:set\\s+plot\\s+id|plot\\s+id\\s+set|प्लॉट\\s+आईडी\\s+(?:सेट करें|सेट करो))\\s*(?:is|to|=|:)?\\s*([A-Za-z0-9_-]{1,80})$").matchEntire(command.trim())
         return match?.groupValues?.getOrNull(1)
     }
 
