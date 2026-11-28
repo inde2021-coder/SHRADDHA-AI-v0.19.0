@@ -1634,6 +1634,8 @@ class AkkpsRunnerActivity : Activity() {
         AkkpsRunnerPageWorkflowPolicy.boundaryAction(raw)?.let { action ->
             when (action) {
                 AkkpsBoundaryVoiceAction.INSPECT_MAP -> inspectLiveMap()
+                AkkpsBoundaryVoiceAction.START_MAP_DRAW -> activateLiveMapTool("draw")
+                AkkpsBoundaryVoiceAction.START_MAP_EDIT -> activateLiveMapTool("edit")
                 AkkpsBoundaryVoiceAction.VERIFY_UPLOAD -> verifyLiveBoundaryUpload()
                 AkkpsBoundaryVoiceAction.PREPARE_UPLOAD -> prepareBoundaryForAkkpsUpload()
                 AkkpsBoundaryVoiceAction.IMPORT_SATELLITE -> importSatelliteCandidate()
