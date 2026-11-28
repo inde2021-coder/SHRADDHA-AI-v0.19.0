@@ -1096,7 +1096,7 @@ class AkkpsRunnerActivity : Activity() {
               const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim();
               const candidates=[...document.querySelectorAll('input')].filter(e=>{
                 if(!visible(e)||e.disabled||e.readOnly||['hidden','password','file','checkbox','radio','button','submit','reset'].includes(String(e.type||'').toLowerCase())) return false;
-                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean); labels.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
+                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean); labels.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
                 const hints=[e.type,e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).join(' ');
                 return String(e.type||'').toLowerCase()==='search'||/(search|find|खोज|ढूंढ|ढूँढ)/i.test(hints);
               });
@@ -1187,7 +1187,7 @@ class AkkpsRunnerActivity : Activity() {
                 const key=norm(item.key);
                 const found=all.filter(e=>{
                   if(!editable(e)) return false;
-                  const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean); ls.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
+                  const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean); ls.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
                 });
@@ -1481,7 +1481,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 if(matches.length===0){
                   const checkboxMatches=[...f.querySelectorAll('input[type=checkbox]')].filter(e=>{
                     if(!checkboxEditable(e)) return false;
-                    const labels=[...(e.labels||[])].map(x=>x.innerText); const parent=e.closest('label'); if(parent) labels.push(parent.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean); labels.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
+                    const labels=[...(e.labels||[])].map(x=>x.innerText); const parent=e.closest('label'); if(parent) labels.push(parent.innerText); const ids=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean); labels.push(...ids.map(id=>document.getElementById(id)?.innerText||''));
                     return [e.name,e.id,e.getAttribute('aria-label'),...labels].map(norm).some(x=>x && x===key);
                   });
                   if(checkboxMatches.length>0){
