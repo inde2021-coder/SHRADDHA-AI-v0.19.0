@@ -17,6 +17,8 @@ class AkkpsBrowserWindow:
         self.window.minsize(620, 480)
         self.operator = AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
         self.status = tk.StringVar(value="Browser not started")
+        self.field_label = tk.StringVar()
+        self.field_value = tk.StringVar()
         self._build()
 
     def _build(self):
@@ -30,7 +32,16 @@ class AkkpsBrowserWindow:
         ttk.Button(bar, text="Inspect Current Page", command=self.inspect).pack(side="left")
         ttk.Button(bar, text="Close Browser", command=self.close_browser).pack(side="left", padx=6)
         ttk.Label(root, textvariable=self.status, foreground="#146c43").pack(anchor="w", pady=8)
-        self.output = tk.Text(root, wrap="word", height=25); self.output.pack(fill="both", expand=True)
+        form = ttk.LabelFrame(root, text="Reviewed form entry", padding=8); form.pack(fill="x", pady=(0, 8))
+        ttk.Label(form, text="Exact field label").grid(row=0, column=0, sticky="w")
+        ttk.Entry(form, textvariable=self.field_label, width=28).grid(row=0, column=1, sticky="ew", padx=6)
+        ttk.Label(form, text="Value").grid(row=0, column=2, sticky="w")
+        ttk.Entry(form, textvariable=self.field_value, width=28).grid(row=0, column=3, sticky="ew", padx=6)
+        ttk.Button(form, text="Preview", command=self.preview_fill).grid(row=0, column=4, padx=4)
+        ttk.Button(form, text="Fill Exact Field", command=self.fill_field).grid(row=0, column=5, padx=4)
+        ttk.Button(form, text="Submit Record…", command=self.submit).grid(row=0, column=6, padx=4)
+        form.columnconfigure(1, weight=1); form.columnconfigure(3, weight=1)
+        self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
         self.window.protocol("WM_DELETE_WINDOW", self.close)
@@ -63,6 +74,38 @@ class AkkpsBrowserWindow:
             self._show(inventory.__dict__)
         except Exception as exc:
             messagebox.showerror("Page inspection failed", str(exc), parent=self.window)
+
+    def preview_fill(self):
+        try:
+            preview = self.operator.preview({self.field_label.get(): self.field_value.get()})
+            self._show(preview)
+            self.status.set("Preview only. Nothing has been entered or submitted.")
+        except Exception as exc:
+            messagebox.showerror("Preview rejected", str(exc), parent=self.window)
+
+    def fill_field(self):
+        try:
+            preview = self.operator.preview({self.field_label.get(): self.field_value.get()})
+            if not messagebox.askyesno("Confirm field entry", json.dumps(preview, ensure_ascii=False, indent=2)[:5000], parent=self.window):
+                return
+            result = self.operator.fill_exact_label(self.field_label.get(), self.field_value.get())
+            self.status.set("Field filled. Record has NOT been submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Field entry rejected", str(exc), parent=self.window)
+
+    def submit(self):
+        if not messagebox.askyesno("Confirm AKKPS submission",
+                "Submit the currently open AKKPS form? Check the page and all values first. This action may create a real record.",
+                parent=self.window):
+            return
+        try:
+            result = self.operator.submit_after_confirmation("SUBMIT AKKPS RECORD")
+            self.status.set("Submit clicked. Server-side record save is NOT yet verified.")
+            self._show(result)
+            messagebox.showwarning("Verify saved record", "The submit click is not proof of saving. Re-open the relevant AKKPS list and verify the record. Do not submit again until checked.", parent=self.window)
+        except Exception as exc:
+            messagebox.showerror("Submission blocked", str(exc), parent=self.window)
 
     def close_browser(self):
         try: self.operator.close()
