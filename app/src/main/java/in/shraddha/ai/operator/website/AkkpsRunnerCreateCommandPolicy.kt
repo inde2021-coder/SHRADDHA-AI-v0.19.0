@@ -14,7 +14,7 @@ internal object AkkpsRunnerCreateCommandPolicy {
     fun resolve(raw: String): AkkpsRunnerModule? {
         if (raw.isBlank() || raw.length > 300 || raw.contains('\n')) return null
         val withoutSubmit = raw.replace(
-            Regex("(?i)(?:^|[\\\\s,;:])(?:submit(?:\\\\s+now)?|save(?:\\\\s+record)?|जमा(?:\\\\s+करें|\\\\s+करो)?|सबमिट(?:\\\\s+करें)?|भेजो|भेजें)$"),
+            Regex("(?i)(?:^|[\\s,;:])(?:submit(?:\\s+now)?|save(?:\\s+record)?|जमा(?:\\s+करें|\\s+करो)?|सबमिट(?:\\s+करें)?|भेजो|भेजें)$"),
             ""
         ).trim()
         val normalized = Normalizer.normalize(withoutSubmit, Normalizer.Form.NFKC)
