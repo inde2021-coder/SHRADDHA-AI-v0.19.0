@@ -13,6 +13,12 @@ object PcCommandInterpreter {
         val lower = command.lowercase()
 
         when {
+            lower in setOf("open akkps", "open terramark", "akkps खोलो", "टेरामार्क खोलो") ->
+                JSONObject().put("kind", "akkps_open")
+            lower in setOf("open akkps runner", "akkps runner खोलो", "runner खोलो") ->
+                JSONObject().put("kind", "akkps_runner")
+            lower in setOf("inspect akkps", "inspect runner", "akkps जांचो", "runner जांचो") ->
+                JSONObject().put("kind", "akkps_inspect")
             lower in setOf("home", "desktop", "show desktop", "देस्कटॉप दिखाओ", "डेस्कटॉप दिखाओ", "होम") ->
                 JSONObject().put("kind", "home")
             lower in setOf("back", "go back", "पीछे जाओ", "वापस जाओ") ->
@@ -70,7 +76,7 @@ object PcCommandInterpreter {
                 JSONObject().put("kind", "key_press").put("chord", "escape")
             lower in setOf("alt tab", "switch window", "विंडो बदलो") ->
                 JSONObject().put("kind", "key_press").put("chord", "alt+tab")
-            else -> error("Command समझ नहीं आया। उदाहरण: Open Notepad, desktop, scroll down, type नमस्ते, volume 40।")
+            else -> error("Command समझ नहीं आया। उदाहरण: Open AKKPS, Open AKKPS Runner, Inspect AKKPS, Open Notepad, desktop, scroll down।")
         }
     }
 }
