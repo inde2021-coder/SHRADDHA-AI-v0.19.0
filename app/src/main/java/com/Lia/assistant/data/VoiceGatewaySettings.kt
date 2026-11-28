@@ -150,6 +150,7 @@ object VoiceGatewaySettings {
         val healthRequest = Request.Builder().url("$base/health").get().build()
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(healthRequest).execute().use { response ->
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             if (!response.isSuccessful) throw IllegalStateException("Backend health check failed (HTTP ${response.code}). Check the URL and deployment.")
             val health = JSONObject(response.body?.string().orEmpty())
             if (!health.optBoolean("ok")) throw IllegalStateException("Backend responded, but its health status is not OK.")
@@ -197,6 +198,7 @@ object VoiceGatewaySettings {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw GatewayRequestException(response.code, message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
