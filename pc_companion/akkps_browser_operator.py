@@ -98,15 +98,15 @@ class PageInventory:
 def _safe_action_label(value: str) -> str | None:
     text = " ".join(str(value or "").casefold().split())
     patterns = (
-        (r"^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)(?:\b|$)", "Create"),
-        (r"^(edit|update|संपादित|बदलें|बदलना)(?:\b|$)", "Edit"),
-        (r"^(save|submit|सहेजें|जमा|सबमिट)(?:\b|$)", "Submit"),
-        (r"^(search|find|filter|खोज|ढूंढ|ढूँढ)(?:\b|$)", "Search"),
-        (r"^(view|open|details|देखें|खोलें)(?:\b|$)", "View"),
-        (r"^(upload|attach|अपलोड|संलग्न)(?:\b|$)", "Upload"),
-        (r"^(delete|remove|हटाएं|मिटाएं|डिलीट)(?:\b|$)", "Delete"),
-        (r"^(sync|सिंक)(?:\b|$)", "Sync"),
-        (r"^(cancel|back|रद्द|वापस)(?:\b|$)", "Cancel"),
+        (r"^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)(?:\s|$)", "Create"),
+        (r"^(edit|update|संपादित|बदलें|बदलना)(?:\s|$)", "Edit"),
+        (r"^(save|submit|सहेजें|जमा|सबमिट)(?:\s|$)", "Submit"),
+        (r"^(search|find|filter|खोज|ढूंढ|ढूँढ)(?:\s|$)", "Search"),
+        (r"^(view|open|details|देखें|खोलें)(?:\s|$)", "View"),
+        (r"^(upload|attach|अपलोड|संलग्न)(?:\s|$)", "Upload"),
+        (r"^(delete|remove|हटाएं|मिटाएं|डिलीट)(?:\s|$)", "Delete"),
+        (r"^(sync|सिंक)(?:\s|$)", "Sync"),
+        (r"^(cancel|back|रद्द|वापस)(?:\s|$)", "Cancel"),
     )
     for pattern, safe in patterns:
         if re.search(pattern, text, re.I):
