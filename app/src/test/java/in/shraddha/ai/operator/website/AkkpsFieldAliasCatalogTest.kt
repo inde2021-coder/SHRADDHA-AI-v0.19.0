@@ -21,6 +21,8 @@ class AkkpsFieldAliasCatalogTest {
             "Pre-season Water Condition" to "preSeasonWaterCondition",
             "Baseline Emission Factor Source" to "baselineEmissionFactorSource",
             "Typical Water Depth (cm)" to "typicalWaterDepthCm",
+            "Yield (qtl/acre)" to "yield",
+            "Irrigation decision maker's gender" to "irrigationDecisionMakerGender",
             "Crop Duration (days)" to "cropDurationDays",
             "Drying Event Dates" to "dryingEventDates",
             "Re-flooding Dates" to "refloodingDates",
