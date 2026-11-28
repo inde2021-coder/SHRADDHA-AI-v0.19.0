@@ -231,6 +231,11 @@ class AkkpsRunnerActivity : Activity() {
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
             LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(candidateActions)
+        val liveMapActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        liveMapActions.addView(action("Live Map Draw") { activateLiveMapTool("draw") }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        liveMapActions.addView(action("Live Map Edit") { activateLiveMapTool("edit") }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        liveMapActions.addView(action("Inspect Live Map") { inspectLiveMap() }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        root.addView(liveMapActions)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
             setTextColor(0xFFBBD8E2.toInt()); setPadding(dp(7), dp(7), dp(7), dp(7))
@@ -1020,6 +1025,106 @@ class AkkpsRunnerActivity : Activity() {
                 .setPositiveButton("ठीक है", null)
                 .show()
         }
+    }
+
+    /**
+     * Activates one exact visible Draw/Edit control on the authenticated AKKPS Plot map.
+     * Vertex placement and editing remain direct user interactions inside the official map.
+     */
+    private fun activateLiveMapTool(tool: String) {
+        if (tool !in setOf("draw", "edit")) {
+            status.text = "केवल Draw और Edit map tools उपलब्ध हैं।"
+            return
+        }
+        if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            status.text = "पहले AKKPS Runner का Plots module खोलें।"
+            return
+        }
+        val field = EditText(this).apply {
+            hint = "Live map पर दिखने वाला exact ${tool.uppercase()} button label"
+            setSingleLine(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(0xFF7896A8.toInt())
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setBackgroundColor(0xFF142536.toInt())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS Live Map • ${tool.uppercase()}")
+            .setMessage("Map पर दिख रहे button का exact label लिखें। Shraddha केवल उसी एक button को activate करेगी। इसके बाद polygon points/vertices आप स्वयं official map पर रखें या move करें।")
+            .setView(field)
+            .setNegativeButton("रद्द करें", null)
+            .setPositiveButton("आगे बढ़ें") { _, _ ->
+                val label = field.text.toString().trim()
+                if (label.isBlank() || label.length > 100 ||
+                    Regex("(?i)password|otp|pin|captcha|submit|जमा|सबमिट").containsMatchIn(label)) {
+                    status.text = "अमान्य map tool label। Submit या sensitive controls स्वीकार नहीं हैं।"
+                    return@setPositiveButton
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Map tool confirm करें")
+                    .setMessage("Tool: ${tool.uppercase()}\nButton: $label\n\nयह केवल Draw/Edit mode activate करने की कोशिश करेगा। कोई coordinates AI द्वारा नहीं बदले जाएँगे और कोई record submit नहीं होगा।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("Activate") { _, _ ->
+                        val script = """
+                            (() => {
+                              const tool = ${JSONObject.quote(tool)};
+                              const label = ${JSONObject.quote(label)};
+                              const visible = e => !!(e && e.getClientRects().length &&
+                                getComputedStyle(e).display !== 'none' &&
+                                getComputedStyle(e).visibility !== 'hidden');
+                              const maps = [...document.querySelectorAll(
+                                '.leaflet-container,.mapboxgl-map,.ol-viewport,[role=application][aria-label*=map i]'
+                              )].filter(visible);
+                              if (maps.length !== 1) return JSON.stringify({
+                                ok:false, reason:'expected_one_visible_map', mapCount:maps.length
+                              });
+                              const matches = [...document.querySelectorAll('button,[role=button]')]
+                                .filter(visible).filter(e => {
+                                  const text = String(e.innerText || e.getAttribute('aria-label') ||
+                                    e.getAttribute('title') || '').replace(/\\s+/g,' ').trim();
+                                  return text === label;
+                                });
+                              if (matches.length !== 1) return JSON.stringify({
+                                ok:false, reason:'button_missing_or_ambiguous', count:matches.length
+                              });
+                              const button = matches[0];
+                              if (button.disabled || ['submit','reset'].includes(
+                                String(button.type || '').toLowerCase())) return JSON.stringify({
+                                  ok:false, reason:'disabled_or_submit_control'
+                                });
+                              const before = {
+                                pressed:button.getAttribute('aria-pressed'),
+                                checked:button.getAttribute('aria-checked'),
+                                className:String(button.className || '')
+                              };
+                              button.click();
+                              const after = {
+                                pressed:button.getAttribute('aria-pressed'),
+                                checked:button.getAttribute('aria-checked'),
+                                className:String(button.className || '')
+                              };
+                              const active = after.pressed === 'true' || after.checked === 'true' ||
+                                (/(active|selected|is-active|is-selected)/i.test(after.className) &&
+                                 after.className !== before.className);
+                              return JSON.stringify({
+                                ok:true, tool, button:label, active,
+                                manualVertexInteractionRequired:true,
+                                geometryChangedByAI:false, recordSubmitted:false
+                              });
+                            })()
+                        """.trimIndent()
+                        web.evaluateJavascript(script) { raw ->
+                            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+                            if (result?.optBoolean("ok") != true) {
+                                status.text = "Live Map ${tool.uppercase()} activate नहीं हुआ: ${result?.optString("reason") ?: "page response invalid"}"
+                            } else if (result.optBoolean("active")) {
+                                status.text = "Live Map ${tool.uppercase()} mode सक्रिय है। अब points/vertices स्वयं map पर रखें या move करें; कोई record submit नहीं हुआ।"
+                            } else {
+                                status.text = "Map button click हुआ, लेकिन active mode verify नहीं हुआ। Page manually जाँचें; Draw/Edit active मानकर आगे न बढ़ें।"
+                            }
+                        }
+                    }.show()
+            }.show()
     }
 
     /**
