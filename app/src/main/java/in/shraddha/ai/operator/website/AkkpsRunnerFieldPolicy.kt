@@ -12,4 +12,13 @@ internal object AkkpsRunnerFieldPolicy {
 
     /** Only ordinary single-select controls may be filled; multi-select is always blocked. */
     fun isAllowedSelect(multiple: Boolean, disabled: Boolean): Boolean = !multiple && !disabled
+
+    /** A checkbox is writable only when the command supplies an explicit yes/no value. */
+    fun parseExplicitBoolean(raw: String): Boolean? = when (
+        raw.trim().lowercase().replace(Regex("\\s+"), " ")
+    ) {
+        "yes", "y", "true", "on", "1", "हाँ", "हां", "सही", "सक्रिय" -> true
+        "no", "n", "false", "off", "0", "नहीं", "नही", "गलत", "निष्क्रिय" -> false
+        else -> null
+    }
 }
