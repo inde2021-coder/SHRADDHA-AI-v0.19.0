@@ -248,16 +248,23 @@ class AkkpsBrowserOperator:
           const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
           const clean = s => (s || '').replace(/\\s+/g, ' ').trim().slice(0, 160);
           const labelFor = e => {
-            const id = e.id;
-            const label = id ? document.querySelector('label[for="' + CSS.escape(id) + '"]') : null;
-            return clean(label?.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.name || e.id);
+            const labels = [...(e.labels || [])].map(x => clean(x.innerText)).filter(Boolean);
+            const labelledBy = (e.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean)
+              .map(id => clean(document.getElementById(id)?.innerText)).filter(Boolean);
+            const fieldset = e.closest('fieldset');
+            const legend = fieldset?.querySelector('legend');
+            return clean([
+              ...labels, ...labelledBy, e.getAttribute('aria-label'),
+              e.closest('label')?.innerText, legend?.innerText,
+              e.getAttribute('placeholder'), e.name, e.id
+            ].filter(Boolean).join(' / '));
           };
           const visibleForms = [...document.querySelectorAll('form')].filter(visible);
           const fieldScope = visibleForms.length === 1 ? visibleForms[0] : document;
           const fields = [...fieldScope.querySelectorAll('input,select,textarea')]
             .filter(visible).map(e => ({
               label: labelFor(e), name: clean(e.name || e.id),
-              type: clean(e.type || e.tagName.toLowerCase()).toLowerCase(),
+              type: clean(e.tagName.toLowerCase() === "select" ? "select" : (e.type || e.tagName.toLowerCase())).toLowerCase(),
               required: !!e.required, disabled: !!e.disabled, readOnly: !!e.readOnly, multiple: !!e.multiple,
               options: e.tagName === 'SELECT' ? [...e.options].map(o => clean(o.label || o.textContent)).filter(Boolean).slice(0, 80) : []
             }));
