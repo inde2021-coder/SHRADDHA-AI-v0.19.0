@@ -770,13 +770,13 @@ class AkkpsRunnerActivity : Activity() {
               });
               if(matches.length!==1) return JSON.stringify({status:"file_field_ambiguous",count:matches.length});
               matches[0].click();
-              return JSON.stringify({status:"picker_opened",accept:matches[0].accept||""});
+              return JSON.stringify({status:"picker_requested",accept:matches[0].accept||""});
             })()
         """.trimIndent().replace("__LABEL__", JSONObject.quote(fieldLabel))
         web.evaluateJavascript(script) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = when (result?.optString("status")) {
-                "picker_opened" -> "AKKPS का $fieldLabel file picker खुला। File आप चुनें; website upload अलग action है।"
+                "picker_requested" -> "AKKPS के $fieldLabel file picker को request भेजी गई। यदि picker न खुले तो वेबसाइट के उसी Upload field पर tap करें; upload अलग action है।"
                 "form_ambiguous" -> "एक स्पष्ट AKKPS form नहीं मिला; document picker नहीं खोला।"
                 else -> "Exact $fieldLabel file field नहीं मिला या ambiguous है; कोई file attach नहीं हुई।"
             }
