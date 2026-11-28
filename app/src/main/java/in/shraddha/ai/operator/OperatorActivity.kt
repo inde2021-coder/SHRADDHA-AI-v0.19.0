@@ -211,8 +211,11 @@ class OperatorActivity : Activity() {
                     } },
                     audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
                 )
+                val adapterRegistry = UniversalCommandAdapterRegistry().apply {
+                    register(AndroidAccessibilityCommandAdapter(engine))
+                }
                 val brain = `in`.shraddha.ai.future.MainBrain(
-                    executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                    executeVerified = { step, confirmed -> adapterRegistry.execute(step, confirmed) },
                     audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
                     context = this@OperatorActivity
                 )
