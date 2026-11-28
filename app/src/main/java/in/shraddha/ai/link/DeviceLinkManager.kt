@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.*
@@ -27,6 +28,58 @@ object DeviceLinkManager {
         .build()
     // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
     private val visionClient = buildVisionHttpClient(client)
+    private val activeAiCalls = ConcurrentHashMap.newKeySet<Call>()
+    private val aiCallLock = Any()
+
+    private fun onlineAiAllowed(): Boolean =
+        appContext?.let { `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(it) } == true
+
+    private fun rejectIfOnlineAiDisabled(done: (Result<String>) -> Unit): Boolean {
+        if (onlineAiAllowed()) return false
+        done(Result.failure(IllegalStateException("Online AI permission is off. Enable it in Settings before sending data to a cloud AI provider.")))
+        return true
+    }
+
+    /** Cancel every in-flight cloud AI request when the user revokes consent. */
+    fun cancelAiRequests() {
+        synchronized(aiCallLock) {
+            activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
+            activeAiCalls.clear()
+        }
+    }
+
+    private fun enqueueOnlineAiCall(
+        call: Call,
+        done: (Result<String>) -> Unit,
+        parse: (Response, String) -> Result<String>
+    ) {
+        synchronized(aiCallLock) {
+            if (!onlineAiAllowed()) {
+                done(Result.failure(IllegalStateException("Online AI permission is off. The cloud request was blocked before sending.")))
+                return
+            }
+            activeAiCalls.add(call)
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, error: java.io.IOException) {
+                    activeAiCalls.remove(call)
+                    done(Result.failure(error))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use {
+                        activeAiCalls.remove(call)
+                        val raw = it.body?.string().orEmpty()
+                        if (!onlineAiAllowed()) {
+                            done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
+                        } else {
+                            done(parse(it, raw))
+                        }
+                    }
+                }
+            })
+        }
+    }
+
     private val reconnectHandler = Handler(Looper.getMainLooper())
     @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
@@ -48,7 +101,7 @@ object DeviceLinkManager {
     @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     @Volatile var onE2EVerification: ((String, String) -> Unit)? = null
-    private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
+    @Volatile private var e2eCrypto = DeviceE2ECrypto.create()
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
     // Reject duplicate authenticated actions for the same peer within this process/session.
@@ -149,6 +202,10 @@ object DeviceLinkManager {
         reconnectPending = false
         socket?.close(1000, "Replacing device session connection")
         socket = null
+        clearAllPeerE2EState()
+        // Fresh ephemeral ECDH keypair for every new relay connection prevents
+        // a captured confirmation proof from being replayed after reconnect.
+        e2eCrypto = DeviceE2ECrypto.create()
         lastBaseUrl = baseUrl
         lastPair = pair
         sessionId = pair.sessionId
@@ -163,7 +220,11 @@ object DeviceLinkManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
-                    if ((msg.optString("type").startsWith("file_transfer_") && msg.optString("type") != "file_transfer_chunk") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
+                    if (msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
+                    if (msg.optString("type").startsWith("file_transfer_")) {
+                        onStatus?.invoke("Blocked plaintext file-transfer control message. End-to-end encryption is mandatory.")
+                        return
+                    }
                     when (msg.optString("type")) {
                         "e2e_message" -> {
                             val peerId = msg.optString("fromDeviceId")
@@ -178,6 +239,7 @@ object DeviceLinkManager {
                             val index = msg.optInt("index", -1)
                             val correlation = when (kind) {
                                 "remote_action", "remote_action_result" -> actionId
+                                "file_transfer_start", "file_transfer_ack", "file_transfer_resume", "file_transfer_cancel" -> transferId
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
                                 "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
@@ -214,6 +276,40 @@ object DeviceLinkManager {
                                         .put("transferId", transferId).put("index", index)
                                     onFileTransferMessage?.invoke(payload)
                                 }
+                                "file_transfer_start" -> {
+                                    require(payload.optString("fileName") == msg.optString("fileName") &&
+                                        payload.optLong("sizeBytes", -1L) == msg.optLong("sizeBytes", -2L) &&
+                                        payload.optInt("chunkCount", -1) == msg.optInt("chunkCount", -2) &&
+                                        payload.optString("sha256").equals(msg.optString("sha256"), ignoreCase = true)) {
+                                        "Encrypted transfer manifest does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_ack" -> {
+                                    require(payload.optInt("index", -2) == msg.optInt("index", -3) &&
+                                        payload.optBoolean("complete") == msg.optBoolean("complete") &&
+                                        payload.optBoolean("ok") == msg.optBoolean("ok")) {
+                                        "Encrypted transfer ACK does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_resume" -> {
+                                    require(payload.optInt("chunkCount", -1) == msg.optInt("chunkCount", -2) &&
+                                        payload.optJSONArray("missingIndexes")?.toString() == msg.optJSONArray("missingIndexes")?.toString()) {
+                                        "Encrypted transfer resume does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_cancel" -> {
+                                    require(payload.optString("reason") == msg.optString("reason")) {
+                                        "Encrypted transfer cancellation does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
                                 "clipboard_payload" -> {
                                     payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
                                         .put("category", "clipboard").put("requestId", msg.optString("requestId"))
@@ -242,17 +338,34 @@ object DeviceLinkManager {
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
                             val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), sessionId.orEmpty(), deviceId.orEmpty(), peerId)
+                            val current = peerKeys[peerId]
+                            // Relays may repeat the same offer during reconnect/status fan-out.
+                            // Do not reset an already-confirmed same-session fingerprint.
+                            if (current?.fingerprint == derived.second) return
                             peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
                             clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
                         }
                         "e2e_key_confirm" -> {
                             val peerId = msg.optString("fromDeviceId")
+                            val fingerprint = msg.optString("fingerprint")
                             val state = peerKeys[peerId]
-                            if (state != null && state.fingerprint == msg.optString("fingerprint")) {
+                            val expectedProof = state?.takeIf { it.fingerprint == fingerprint }?.let {
+                                runCatching {
+                                    DeviceE2ECrypto.confirmationProof(
+                                        it.key, sessionId.orEmpty(), peerId, deviceId.orEmpty(), fingerprint
+                                    )
+                                }.getOrNull()
+                            }
+                            val suppliedProof = msg.optString("proof")
+                            val proofValid = expectedProof != null && suppliedProof.matches(Regex("[a-f0-9]{64}")) &&
+                                MessageDigest.isEqual(expectedProof.toByteArray(Charsets.US_ASCII),
+                                    suppliedProof.toByteArray(Charsets.US_ASCII))
+                            val currentState = peerKeys[peerId]
+                            if (state != null && currentState === state && proofValid) {
                                 state.remoteConfirmed = true
                                 onStatus?.invoke("Peer fingerprint confirmed: " + peerId)
-                            } else onStatus?.invoke("E2E fingerprint mismatch. Do not trust this peer.")
+                            } else onStatus?.invoke("E2E confirmation proof invalid. Peer remains untrusted.")
                         }
 
 
@@ -398,6 +511,7 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         // This endpoint may carry a bearer token. Reuse the pairing URL policy so a
         // misconfigured HTTP URL can never leak gateway credentials over cleartext.
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
@@ -415,20 +529,15 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/chat")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        visionClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).let { body ->
-                        val actual = body.optString("provider", provider)
-                        val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
-                        "$route\n\n${body.getString("answer")}"
-                    } })
-                }
-            }
-        })
+        enqueueOnlineAiCall(visionClient.newCall(builder.build()), done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(
+                runCatching { JSONObject(raw).optString("error", "HTTP ${response.code}") }.getOrDefault("HTTP ${response.code}")
+            )) else runCatching { JSONObject(raw).let { body ->
+                val actual = body.optString("provider", provider)
+                val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
+                "$route\n\n${body.getString("answer")}"
+            } }
+        }
     }
 
     fun publishSocialPost(
@@ -464,14 +573,15 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return }
         val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        requestClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) { response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) done(Result.failure(IllegalStateException("HTTP ${it.code}"))) else done(Result.success(raw)) } }
-        })
+        enqueueOnlineAiCall(requestClient.newCall(builder.build()), done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException("HTTP ${response.code}"))
+            else Result.success(raw)
+        }
     }
 
     fun summarize(baseUrl: String, gatewayToken: String, provider: String, text: String, done: (Result<String>) -> Unit) {
@@ -504,6 +614,7 @@ object DeviceLinkManager {
         done: (Result<String>) -> Unit,
         onCall: ((Call) -> Unit)? = null
     ): Call? {
+        if (rejectIfOnlineAiDisabled(done)) return null
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return null }
         val builder = Request.Builder().url("$safeBaseUrl$path")
@@ -511,21 +622,16 @@ object DeviceLinkManager {
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val call = requestClient.newCall(builder.build())
         onCall?.invoke(call)
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(
-                        runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")
-                    ))) else done(Result.success(raw))
-                }
-            }
-        })
+        enqueueOnlineAiCall(call, done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(
+                runCatching { JSONObject(raw).optString("error", "HTTP ${response.code}") }.getOrDefault("HTTP ${response.code}")
+            )) else Result.success(raw)
+        }
         return call
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return }
         // The vision gateway currently supports Gemini, OpenAI and Anthropic,
@@ -551,20 +657,15 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        requestClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).let { body ->
-                        val actual = body.optString("provider", provider)
-                        val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
-                        "$route\n\n${body.getString("answer")}"
-                    } })
-                }
-            }
-        })
+        enqueueOnlineAiCall(requestClient.newCall(builder.build()), done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(
+                runCatching { JSONObject(raw).optString("error", "HTTP ${response.code}") }.getOrDefault("HTTP ${response.code}")
+            )) else runCatching { JSONObject(raw).let { body ->
+                val actual = body.optString("provider", provider)
+                val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
+                "$route\n\n${body.getString("answer")}"
+            } }
+        }
     }
 
     fun updateSharePermissions(permissions: JSONObject): Boolean = socket?.send(JSONObject().put("type", "permission_update").put("permissions", permissions).toString()) == true
@@ -594,7 +695,9 @@ object DeviceLinkManager {
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
         if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
-        return socket?.send(JSONObject().put("type", "file_transfer_start").put("targetDeviceId", targetDeviceId).put("requestId", requestId).put("transferId", transferId).put("fileName", fileName.take(120)).put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()).toString()) == true
+        return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_start",
+            JSONObject().put("requestId", requestId).put("fileName", DeviceFileTransferProtocol.safeDisplayName(fileName))
+                .put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()), transferId)
     }
     fun sendFileTransferChunk(targetDeviceId: String, transferId: String, index: Int, bytes: ByteArray): Boolean {
         if (transferId.isBlank() || index !in 0 until DeviceFileTransferProtocol.MAX_CHUNKS || bytes.isEmpty() || bytes.size > DeviceFileTransferProtocol.CHUNK_BYTES) return false
@@ -608,14 +711,18 @@ object DeviceLinkManager {
             missingIndexes.any { it !in 0 until chunkCount } || missingIndexes.distinct().size != missingIndexes.size) return false
         val indexes = JSONArray()
         missingIndexes.forEach(indexes::put)
-        return socket?.send(JSONObject().put("type", "file_transfer_resume")
-            .put("targetDeviceId", sourceDeviceId).put("transferId", transferId)
-            .put("chunkCount", chunkCount).put("missingIndexes", indexes).toString()) == true
+        return sendEncryptedPeerMessage(sourceDeviceId, "file_transfer_resume",
+            JSONObject().put("chunkCount", chunkCount).put("missingIndexes", indexes), transferId)
     }
-    fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean =
-        socket?.send(JSONObject().put("type", "file_transfer_ack").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("complete", complete).put("ok", ok).toString()) == true
+    fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean {
+        if (!transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || index !in -1 until DeviceFileTransferProtocol.MAX_CHUNKS) return false
+        return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_ack",
+            JSONObject().put("index", index).put("complete", complete).put("ok", ok), transferId)
+    }
     fun cancelFileTransfer(targetDeviceId: String, transferId: String, reason: String = "cancelled"): Boolean =
-        socket?.send(JSONObject().put("type", "file_transfer_cancel").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("reason", reason.take(120)).toString()) == true
+        if (!transferId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) false
+        else sendEncryptedPeerMessage(targetDeviceId, "file_transfer_cancel",
+            JSONObject().put("reason", reason.take(120)), transferId)
 
 
     private fun sendE2EKeyOffer(targetDeviceId: String): Boolean =
@@ -624,8 +731,14 @@ object DeviceLinkManager {
     fun confirmE2EPeer(peerId: String, fingerprint: String): Boolean {
         val state = peerKeys[peerId] ?: return false
         if (state.fingerprint != fingerprint) return false
-        state.localConfirmed = true
-        return socket?.send(JSONObject().put("type", "e2e_key_confirm").put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+        val proof = runCatching {
+            DeviceE2ECrypto.confirmationProof(state.key, sessionId.orEmpty(), deviceId.orEmpty(), peerId, fingerprint)
+        }.getOrNull() ?: return false
+        val sent = socket?.send(JSONObject().put("type", "e2e_key_confirm")
+            .put("targetDeviceId", peerId).put("fingerprint", fingerprint).put("proof", proof).toString()) == true
+        val stillCurrent = peerKeys[peerId] === state
+        state.localConfirmed = sent && stillCurrent
+        return sent && stillCurrent
     }
 
     private fun clearVisualFrameState(peerId: String) {
@@ -678,7 +791,27 @@ object DeviceLinkManager {
         }
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
-        if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
+        if (kind.startsWith("file_transfer_")) message.put("transferId", correlationId)
+        if (kind == "file_transfer_chunk") message.put("index", index)
+        when (kind) {
+            "file_transfer_start" -> {
+                message.put("requestId", payload.optString("requestId"))
+                    .put("fileName", payload.optString("fileName"))
+                    .put("sizeBytes", payload.optLong("sizeBytes", -1L))
+                    .put("chunkCount", payload.optInt("chunkCount", -1))
+                    .put("sha256", payload.optString("sha256"))
+            }
+            "file_transfer_ack" -> {
+                message.put("index", payload.optInt("index", -2))
+                    .put("complete", payload.optBoolean("complete"))
+                    .put("ok", payload.optBoolean("ok"))
+            }
+            "file_transfer_resume" -> {
+                message.put("chunkCount", payload.optInt("chunkCount", -1))
+                    .put("missingIndexes", payload.optJSONArray("missingIndexes") ?: JSONArray())
+            }
+            "file_transfer_cancel" -> message.put("reason", payload.optString("reason", "cancelled"))
+        }
         if (kind == "clipboard_payload" || kind == "task_handoff" || kind == "task_handoff_response") message.put("requestId", correlationId)
         if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
@@ -697,6 +830,19 @@ object DeviceLinkManager {
     fun requestPcTextPreview(targetDeviceId: String, relativePath: String): Boolean =
         if (relativePath.isBlank()) false else sendAction(targetDeviceId,
             JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
+
+    fun requestPcFileOpen(targetDeviceId: String, relativePath: String): Boolean =
+        if (targetDeviceId.isBlank() || relativePath.isBlank() || relativePath.length > 500) false
+        else sendAction(targetDeviceId, JSONObject().put("kind", "file_open").put("path", relativePath.trim()))
+
+    fun requestPcFileSearch(targetDeviceId: String, query: String, relativePath: String = ""): Boolean {
+        val cleanQuery = query.trim()
+        if (targetDeviceId.isBlank() || cleanQuery.length !in 2..80 || relativePath.length > 500) return false
+        return sendAction(targetDeviceId, JSONObject()
+            .put("kind", "file_search")
+            .put("query", cleanQuery)
+            .put("path", relativePath.trim()))
+    }
 
     @Deprecated("Plaintext peer chat is disabled; use a mutually verified E2E peer channel.")
     fun sendChat(message: String): Boolean = false
