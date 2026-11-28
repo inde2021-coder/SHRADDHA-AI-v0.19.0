@@ -47,10 +47,11 @@ class SkillPackTrustPolicyTest {
             SkillPackTrustPolicy.Decision.QUEUE_FOR_REVIEW,
             SkillPackTrustPolicy.evaluate(imported, true).decision
         )
-        assertEquals(
-            SkillPackTrustPolicy.Decision.AUTO_ACTIVATE,
-            SkillPackTrustPolicy.evaluate(imported.copy(userImportConsent = true, signedManifestVerified = false), true).decision
+        val consentedImport = SkillPackTrustPolicy.evaluate(
+            imported.copy(userImportConsent = true, signedManifestVerified = false), true
         )
+        assertEquals(SkillPackTrustPolicy.Decision.QUEUE_FOR_REVIEW, consentedImport.decision)
+        assertTrue(consentedImport.reasons.any { it.contains("manual review") })
     }
 
     @Test fun malformedMetadataIsRejected() {
