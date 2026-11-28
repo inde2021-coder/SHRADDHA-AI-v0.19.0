@@ -28,6 +28,7 @@ object DeviceLinkManager {
     // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
     private val visionClient = buildVisionHttpClient(client)
     private val activeAiCalls = ConcurrentHashMap.newKeySet<Call>()
+    private val aiCallLock = Any()
     private fun onlineAiAllowed(): Boolean = appContext?.let { `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(it) } == true
     private fun rejectIfOnlineAiDisabled(done: (Result<String>) -> Unit): Boolean {
         if (onlineAiAllowed()) return false
@@ -35,8 +36,45 @@ object DeviceLinkManager {
         return true
     }
     fun cancelAiRequests() {
-        activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
-        activeAiCalls.clear()
+        synchronized(aiCallLock) {
+            activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
+            activeAiCalls.clear()
+        }
+    }
+
+    /** Consent is rechecked under the same lock used by cancellation immediately before enqueue. */
+    private fun enqueueOnlineAiCall(
+        call: Call,
+        done: (Result<String>) -> Unit,
+        onCall: ((Call) -> Unit)? = null,
+        parse: (Response, String) -> Result<String>
+    ) {
+        synchronized(aiCallLock) {
+            if (!onlineAiAllowed()) {
+                done(Result.failure(IllegalStateException("Online AI permission is off. Cloud request was blocked before sending.")))
+                return
+            }
+            activeAiCalls.add(call)
+            onCall?.invoke(call)
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, error: java.io.IOException) {
+                    synchronized(aiCallLock) { activeAiCalls.remove(call) }
+                    done(Result.failure(error))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use {
+                        synchronized(aiCallLock) { activeAiCalls.remove(call) }
+                        val raw = it.body?.string().orEmpty()
+                        if (!onlineAiAllowed()) {
+                            done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
+                        } else {
+                            done(parse(it, raw))
+                        }
+                    }
+                }
+            })
+        }
     }
     private val reconnectHandler = Handler(Looper.getMainLooper())
     @Volatile private var appContext: Context? = null
@@ -428,23 +466,17 @@ object DeviceLinkManager {
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val aiCall = visionClient.newCall(builder.build())
-        activeAiCalls.add(aiCall)
-        aiCall.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    activeAiCalls.remove(call)
-                    val raw = it.body?.string().orEmpty()
-                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
-                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).let { body ->
-                        val actual = body.optString("provider", provider)
-                        val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
-                        "$route\n\n${body.getString("answer")}"
-                    } })
+        enqueueOnlineAiCall(aiCall, done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(runCatching {
+                JSONObject(raw).optString("error", "HTTP ${response.code}")
+            }.getOrDefault("HTTP ${response.code}"))) else runCatching {
+                JSONObject(raw).let { body ->
+                    val actual = body.optString("provider", provider)
+                    val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
+                    "$route\n\n${body.getString("answer")}"
                 }
             }
-        })
+        }
     }
 
     fun publishSocialPost(
@@ -490,16 +522,10 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val aiCall = requestClient.newCall(builder.build())
-        activeAiCalls.add(aiCall)
-        aiCall.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) { response.use {
-                activeAiCalls.remove(call)
-                val raw = it.body?.string().orEmpty()
-                if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
-                else if (!it.isSuccessful) done(Result.failure(IllegalStateException("HTTP ${it.code}"))) else done(Result.success(raw))
-            } }
-        })
+        enqueueOnlineAiCall(aiCall, done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException("HTTP ${response.code}"))
+            else Result.success(raw)
+        }
     }
 
     fun summarize(baseUrl: String, gatewayToken: String, provider: String, text: String, done: (Result<String>) -> Unit) {
@@ -542,21 +568,11 @@ object DeviceLinkManager {
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val call = requestClient.newCall(builder.build())
-        activeAiCalls.add(call)
-        onCall?.invoke(call)
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    activeAiCalls.remove(call)
-                    val raw = it.body?.string().orEmpty()
-                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
-                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(
-                        runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")
-                    ))) else done(Result.success(raw))
-                }
-            }
-        })
+        enqueueOnlineAiCall(call, done, onCall) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(runCatching {
+                JSONObject(raw).optString("error", "HTTP ${response.code}")
+            }.getOrDefault("HTTP ${response.code}"))) else Result.success(raw)
+        }
         return call
     }
 
@@ -588,23 +604,17 @@ object DeviceLinkManager {
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val aiCall = requestClient.newCall(builder.build())
-        activeAiCalls.add(aiCall)
-        aiCall.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    activeAiCalls.remove(call)
-                    val raw = it.body?.string().orEmpty()
-                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
-                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).let { body ->
-                        val actual = body.optString("provider", provider)
-                        val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
-                        "$route\n\n${body.getString("answer")}"
-                    } })
+        enqueueOnlineAiCall(aiCall, done) { response, raw ->
+            if (!response.isSuccessful) Result.failure(IllegalStateException(runCatching {
+                JSONObject(raw).optString("error", "HTTP ${response.code}")
+            }.getOrDefault("HTTP ${response.code}"))) else runCatching {
+                JSONObject(raw).let { body ->
+                    val actual = body.optString("provider", provider)
+                    val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
+                    "$route\n\n${body.getString("answer")}"
                 }
             }
-        })
+        }
     }
 
     fun updateSharePermissions(permissions: JSONObject): Boolean = socket?.send(JSONObject().put("type", "permission_update").put("permissions", permissions).toString()) == true
