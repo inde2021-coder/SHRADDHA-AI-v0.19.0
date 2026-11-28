@@ -658,6 +658,47 @@ class AkkpsRunnerActivity : Activity() {
         }
     }
 
+    /**
+     * Verify a previously performed portal boundary write from the observer installed
+     * on the current authenticated AKKPS page. Missing evidence is explicitly uncertain.
+     */
+    private fun verifyLiveBoundaryUpload() {
+        if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            status.text = "पहले AKKPS Runner का Plots module खोलें।"
+            return
+        }
+        val script = """
+            (() => {
+              const events=Array.isArray(window.__akkpsSubmitEvents)?window.__akkpsSubmitEvents:[];
+              const recent=events.filter(e=>e && e.recordWrite &&
+                ['POST','PUT','PATCH'].includes(String(e.method||'').toUpperCase()) &&
+                Number(e.httpStatus)>=200 && Number(e.httpStatus)<300 &&
+                e.success===true && !!String(e.recordId||'').trim() &&
+                /(boundary|plot|map|kml)/i.test(String(e.path||'')) &&
+                Date.now()-Number(e.at||0)<=15*60*1000);
+              const last=recent.sort((a,b)=>Number(b.at)-Number(a.at))[0]||null;
+              return JSON.stringify(last?{
+                verified:true, recordId:String(last.recordId).slice(0,100),
+                path:String(last.path).slice(0,180), httpStatus:Number(last.httpStatus)
+              }:{verified:false});
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result?.optBoolean("verified") == true) {
+                val recordId = result.optString("recordId")
+                status.text = "AKKPS boundary write response verified • Record ID: $recordId • अब Plot map Reopen करके polygon दिखना जाँचें।"
+                AlertDialog.Builder(this)
+                    .setTitle("Boundary server response verified")
+                    .setMessage("AKKPS ने 2xx success response और Record ID $recordId दिया। यह server response का प्रमाण है; अब Plot का map दोबारा खोलकर polygon की दृश्य पुष्टि करें।")
+                    .setPositiveButton("ठीक है", null)
+                    .show()
+            } else {
+                status.text = "इस session में boundary upload का 2xx success + Record ID नहीं मिला। परिणाम uncertain है; दोबारा upload करने से पहले Plot map/list जाँचें।"
+            }
+        }
+    }
+
     private fun saveBoundary() {
         val plotId = plotIdInput.text.toString().trim()
         if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
@@ -1093,6 +1134,10 @@ class AkkpsRunnerActivity : Activity() {
         }
         if (Regex("(?i)\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
             status.text = "Password, OTP, PIN या CAPTCHA को command में न लिखें। वेबसाइट के login/form में स्वयं दर्ज करें।"; return
+        }
+        if (Regex("(?i)\\b(verify|confirm|check)\\b.*\\b(boundary|kml)\\b|(?:boundary|kml).*(?:verify|confirm|check|जाँचो|जांचो|पुष्टि)").containsMatchIn(raw)) {
+            verifyLiveBoundaryUpload()
+            return
         }
         if (Regex("(?i)\\b(inspect|check|देखो|जाँचो|जांचो)\\b.*\\b(map|boundary|नक्शा|मानचित्र|सीमा)\\b|(?:नक्शा|मानचित्र|सीमा).*(?:जाँचो|जांचो|देखो)").containsMatchIn(raw)) {
             inspectLiveMap()
