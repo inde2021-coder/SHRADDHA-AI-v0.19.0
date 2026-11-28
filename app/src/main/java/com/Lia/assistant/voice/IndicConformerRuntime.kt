@@ -180,12 +180,15 @@ object IndicConformerRuntime {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().buffered().use { input ->
             val buffer = ByteArray(1024 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
+            try {
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            } finally {
+                buffer.fill(0)
             }
-            buffer.fill(0)
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
