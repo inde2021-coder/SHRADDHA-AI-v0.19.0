@@ -966,13 +966,19 @@ class AkkpsRunnerActivity : Activity() {
                 getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden');
               const clean=e=>String(e?.innerText||e?.getAttribute('aria-label')||e?.title||'')
                 .replace(/\\s+/g,' ').trim().slice(0,90);
-              const surfaces=[...document.querySelectorAll(
-                '.leaflet-container,.mapboxgl-map,.ol-viewport,[role=application][aria-label*=map i],canvas'
-              )].filter(visible).slice(0,12).map(e=>({
+              const mapSelector='.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,'+
+                '[data-testid*="map" i],[role=application][aria-label*=map i],[aria-label*=map i]';
+              const candidates=[...document.querySelectorAll(mapSelector)].filter(visible);
+              const engineRoots=candidates.filter(e=>
+                e.classList.contains('leaflet-container') || e.classList.contains('mapboxgl-map') ||
+                e.classList.contains('ol-viewport') || e.classList.contains('gm-style'));
+              const preferred=engineRoots.length?engineRoots:candidates;
+              const roots=preferred.filter(e=>!preferred.some(other=>other!==e && other.contains(e)));
+              const surfaces=roots.slice(0,12).map(e=>({
                 kind:e.classList.contains('leaflet-container')?'leaflet':
                   e.classList.contains('mapboxgl-map')?'mapbox-gl':
                   e.classList.contains('ol-viewport')?'openlayers':
-                  e.tagName.toLowerCase()==='canvas'?'canvas':'application',
+                  e.classList.contains('gm-style')?'google-maps':'labelled-map',
                 width:Math.round(e.getBoundingClientRect().width),
                 height:Math.round(e.getBoundingClientRect().height),
                 label:clean(e)
@@ -989,10 +995,10 @@ class AkkpsRunnerActivity : Activity() {
               const engine=window.L?'leaflet':window.mapboxgl?'mapbox-gl':
                 window.google?.maps?'google-maps':window.ol?'openlayers':
                 window.maplibregl?'maplibre':'unknown';
-              const polygonCount=document.querySelectorAll(
-                '.leaflet-interactive.leaflet-polygon, .ol-overlaycontainer svg path, [data-geometry-type="polygon" i]'
+              const vectorLayerHintCount=document.querySelectorAll(
+                '.leaflet-overlay-pane svg path, .ol-overlaycontainer svg path, [data-layer-type*="polygon" i], [data-geometry-type="polygon" i]'
               ).length;
-              return {engine,surfaces,controls,uploads,polygonVisualCount:polygonCount,
+              return {engine,surfaces,controls,uploads,vectorLayerHintCount,
                 route:location.pathname};
             })()
         """.trimIndent()
@@ -1005,7 +1011,7 @@ class AkkpsRunnerActivity : Activity() {
             val surfaces = result.optJSONArray("surfaces") ?: JSONArray()
             val controls = result.optJSONArray("controls") ?: JSONArray()
             val uploads = result.optJSONArray("uploads") ?: JSONArray()
-            status.text = "Live Map: ${result.optString("engine")} • surfaces ${surfaces.length()} • controls ${controls.length()} • file fields ${uploads.length()} • visible layer hints ${result.optInt("polygonVisualCount")}। केवल inspection हुआ; कोई coordinate/geometry बदली या submit नहीं हुई।"
+            status.text = "Live Map: ${result.optString("engine")} • surfaces ${surfaces.length()} • controls ${controls.length()} • file fields ${uploads.length()} • visible vector-layer hints ${result.optInt("vectorLayerHintCount")}। केवल inspection हुआ; कोई coordinate/geometry बदली या submit नहीं हुई।"
             val summary = buildString {
                 append("Map engine: ${result.optString("engine")}\n")
                 append("Route: ${result.optString("route")}\n")
