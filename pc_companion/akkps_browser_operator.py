@@ -193,7 +193,7 @@ class AkkpsBrowserOperator:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:
             raise RuntimeError(
-                "Browser automation is optional. Install pc_companion/requirements-browser.txt."
+                "Browser automation is optional. Install Playwright with `python -m pip install playwright==1.55.0` and install Microsoft Edge."
             ) from exc
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._playwright = sync_playwright().start()
