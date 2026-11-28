@@ -13,10 +13,14 @@ internal object AkkpsRunnerCreateCommandPolicy {
 
     fun resolve(raw: String): AkkpsRunnerModule? {
         if (raw.isBlank() || raw.length > 300 || raw.contains('\n')) return null
-        val normalized = Normalizer.normalize(raw, Normalizer.Form.NFKC)
+        val withoutSubmit = raw.replace(
+            Regex("(?i)(?:^|[\\\\s,;:])(?:submit(?:\\\\s+now)?|save(?:\\\\s+record)?|जमा(?:\\\\s+करें|\\\\s+करो)?|सबमिट(?:\\\\s+करें)?|भेजो|भेजें)$"),
+            ""
+        ).trim()
+        val normalized = Normalizer.normalize(withoutSubmit, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT).replace(Regex("[\\p{Punct}]+"), " ")
             .replace(Regex("\\s+"), " ").trim()
-        if (Regex("(?:^|\\s)(?:submit|delete|payment|भुगतान|हटाएं|मिटाएं)(?:\\s|$)").containsMatchIn(normalized)) return null
+        if (Regex("(?:^|\\s)(?:delete|payment|भुगतान|हटाएं|मिटाएं)(?:\\s|$)").containsMatchIn(normalized)) return null
 
         val prefixCommand = createPrefixes.any { prefix ->
             normalized.startsWith("$prefix ") && normalized.removePrefix("$prefix ").isNotBlank()
