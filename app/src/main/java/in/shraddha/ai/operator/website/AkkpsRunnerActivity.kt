@@ -256,6 +256,12 @@ class AkkpsRunnerActivity : Activity() {
                     return false
                 }
                 override fun onPageFinished(view: WebView, url: String) {
+                    if (pendingAwdRepeaterUrl != null && pendingAwdRepeaterUrl != url) {
+                        pendingAwdRepeaterSection = null
+                        pendingAwdRepeaterUrl = null
+                        pendingAwdRepeaterBaseline = -1
+                        pendingAwdRepeaterSignature = null
+                    }
                     if (AkkpsWebsiteProfile.allowsRunnerNavigation(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
                         installSubmitObserver()
@@ -524,7 +530,7 @@ class AkkpsRunnerActivity : Activity() {
     /** Adds exactly one blank row inside one recognized AWD section. */
     private fun addAwdRepeatedEntry(sectionLabel: String) {
         val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
-        if (route?.module != AkkpsRunnerModule.AWD_REPORTS ||
+        if (route == null || route.module != AkkpsRunnerModule.AWD_REPORTS ||
             !(route.isCreateRoute || route.isDetailRoute)) {
             status.text = "पहले AKKPS AWD Reports का Create/Edit form खोलें।"
             return
@@ -536,9 +542,9 @@ class AkkpsRunnerActivity : Activity() {
         val script = """
             (() => {
               const aliases = {
-                "drying event dates":["drying event dates","drying events","drying date","सूखने की तारीखें","सूखने की घटना"],
-                "re-flooding dates":["re-flooding dates","reflooding dates","re-flooding events","पुनः बाढ़ की तारीखें","दोबारा पानी भरने की तारीखें"],
-                "fertilizer application dates":["fertilizer application dates","fertilizer applications","fertilizer","खाद डालने की तारीखें","उर्वरक"],
+                "drying event dates":["drying event dates","drying event date","drying events","drying date","सूखने की तारीखें","सूखने की घटना"],
+                "re-flooding dates":["re-flooding dates","re-flooding date","reflooding dates","re-flooding events","पुनः बाढ़ की तारीखें","दोबारा पानी भरने की तारीखें"],
+                "fertilizer application dates":["fertilizer application dates","fertilizer application date","fertilizer applications","fertilizer","खाद डालने की तारीखें","उर्वरक"],
                 "other fertilizer rows":["other fertilizer rows","other fertilizers","अन्य खाद","अन्य उर्वरक"],
                 "field visits":["field visits","field visit / audit logs","audit logs","खेत का दौरा","खेत के दौरे"],
                 "historical yield rows":["historical yield rows","historical yields","past yields","ऐतिहासिक उपज"],
@@ -632,6 +638,10 @@ class AkkpsRunnerActivity : Activity() {
     private fun fillLatestAwdRepeater(values: List<Pair<String, String>>) {
         val section = pendingAwdRepeaterSection ?: return
         if (pendingAwdRepeaterUrl != web.url.orEmpty() || pendingAwdRepeaterBaseline < 0) {
+            pendingAwdRepeaterSection = null
+            pendingAwdRepeaterUrl = null
+            pendingAwdRepeaterBaseline = -1
+            pendingAwdRepeaterSignature = null
             status.text = "AWD form बदल गया है; नए row को सुरक्षित रूप से target नहीं कर सकते।"
             return
         }
@@ -730,7 +740,7 @@ class AkkpsRunnerActivity : Activity() {
     /** Open the website's own file picker for one exact visible document field. */
     private fun openDocumentField(fieldLabel: String) {
         val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
-        if (route?.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
+        if (route == null || route.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
             !(route.isCreateRoute || route.isDetailRoute)) {
             status.text = "पहले Farmer, Plot या AWD का Create/Edit form खोलें।"
             return
@@ -766,7 +776,7 @@ class AkkpsRunnerActivity : Activity() {
     /** User-spoken exact autocomplete phrase; only a unique exact visible option is selected. */
     private fun selectAutocompleteOption(request: AkkpsAutocompleteRequest) {
         val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
-        if (route?.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
+        if (route == null || route.module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) ||
             !(route.isCreateRoute || route.isDetailRoute)) {
             status.text = "पहले Farmer, Plot या AWD का Create/Edit form खोलें।"
             return
