@@ -1079,7 +1079,7 @@ class AkkpsRunnerActivity : Activity() {
                               if (maps.length !== 1) return JSON.stringify({
                                 ok:false, reason:'expected_one_visible_map', mapCount:maps.length
                               });
-                              const matches = [...document.querySelectorAll('button,[role=button]')]
+                              const matches = [...maps[0].querySelectorAll('button,[role=button]')]
                                 .filter(visible).filter(e => {
                                   const text = String(e.innerText || e.getAttribute('aria-label') ||
                                     e.getAttribute('title') || '').replace(/\\s+/g,' ').trim();
