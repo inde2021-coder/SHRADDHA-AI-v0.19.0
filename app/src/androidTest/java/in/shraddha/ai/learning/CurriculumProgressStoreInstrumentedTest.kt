@@ -80,6 +80,26 @@ class CurriculumProgressStoreInstrumentedTest {
 
         store.setGuardianMode(false)
     }
+    @Test fun tamperedEncryptedProgressFailsClosedInsteadOfResettingProgress() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        store.setDailyLimit(60)
+        val prefs = context.getSharedPreferences("shraddha_curriculum_progress_v1", Context.MODE_PRIVATE)
+        assertTrue(prefs.contains("encrypted_state"))
+
+        // Valid Base64 length, but not a valid AES-GCM record.
+        assertTrue(prefs.edit().putString("encrypted_state", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").commit())
+        var rejected = false
+        try {
+            store.snapshot()
+        } catch (_: Exception) {
+            rejected = true
+        }
+        assertTrue("Tampered progress must not be treated as a fresh empty profile.", rejected)
+        assertEquals("Corrupted data remains available for diagnosis; it is not silently overwritten.",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", prefs.getString("encrypted_state", null))
+    }
+
     @Test fun verseProgressRejectsReferencesOutsideActualChapterCounts() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
