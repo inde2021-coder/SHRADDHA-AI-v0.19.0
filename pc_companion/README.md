@@ -69,4 +69,11 @@ The Windows companion includes an optional local-only language lab for Hindi, Ma
 python -m pip install -r requirements-language.txt
 ```
 
-Install the licensed model weights locally and configure their paths in the Language Lab. No speech is sent to a cloud provider by this module. Sanskrit and Pawari are intentionally not offered as speech models until verified model assets and evaluation data are available. The lab does not download model weights automatically and does not clone a voice without explicit reference-speaker consent.
+Install licensed model weights locally and set these environment variables before starting the companion:
+
+- `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_EN`: local Sherpa-ONNX model files.
+- `SHRADDHA_ASR_TOKENS_INDIC` and `SHRADDHA_ASR_TOKENS_EN`: matching local token files.
+- `SHRADDHA_TRANSLATION_MODEL_DIR`: local IndicTrans2 checkpoint directory.
+- IndicF5 weights must already be in the local Hugging Face cache; network downloads are disabled by `local_files_only=True`.
+
+No speech or translation text is sent to a cloud provider by this module. Sanskrit and Pawari are intentionally not offered as speech models until verified model assets and evaluation data are available. The lab does not download model weights automatically and does not clone a voice without explicit reference-speaker consent.
