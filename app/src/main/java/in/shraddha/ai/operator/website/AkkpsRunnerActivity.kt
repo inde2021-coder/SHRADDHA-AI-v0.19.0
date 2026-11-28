@@ -1074,7 +1074,7 @@ class AkkpsRunnerActivity : Activity() {
                                 getComputedStyle(e).display !== 'none' &&
                                 getComputedStyle(e).visibility !== 'hidden');
                               const maps = [...document.querySelectorAll(
-                                '.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,[role=application][aria-label*=map i],[aria-label*=map i]'
+                                '.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,[role=application][aria-label*=map i]'
                               )].filter(visible);
                               if (maps.length !== 1) return JSON.stringify({
                                 ok:false, reason:'expected_one_visible_map', mapCount:maps.length
