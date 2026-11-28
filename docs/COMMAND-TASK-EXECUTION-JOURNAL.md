@@ -21,6 +21,7 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - `LiaApplication.onCreate()` runs the shared recovery gate before the app exposes command tools. `MainBrain.executeVoiceTool()` refuses to start a tool when the gate is closed and writes a durable one-step plan before dispatching the adapter.
 - Corrupt or undecodable journal data makes recovery fail closed; it is never treated as an empty journal. Storage pruning may remove terminal history only and must retain every non-terminal plan, or reject the new write when the protected set cannot fit.
 - UNCERTAIN is never automatically replayed. An adapter independently inspects the remote side effect and calls reconciliation.
+- While any step is RUNNING or UNCERTAIN, the voice entry point blocks all new external actions, even if the next command uses different wording. This avoids bypassing an unresolved send/submit by rephrasing it.
 - Voice-tool results with `queued`, ambiguous `error`/`failed`, or missing/unknown status remain `UNCERTAIN`; queue acceptance is not proof of external completion, and a tool error may follow a partial side effect.
 - SUCCEEDED, BLOCKED and SKIPPED are terminal.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
