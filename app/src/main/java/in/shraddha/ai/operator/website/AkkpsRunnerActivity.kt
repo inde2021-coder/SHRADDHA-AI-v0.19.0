@@ -306,6 +306,8 @@ class AkkpsRunnerActivity : Activity() {
                             }
                             .setPositiveButton("यही KML attach करें") { _, _ ->
                                 pendingBoundaryUploadUri = null
+                                uploadCallback = null
+                                grantUriPermission(packageName, preparedBoundary, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 callback.onReceiveValue(arrayOf(preparedBoundary))
                                 status.text = "KML boundary वेबसाइट form में attach हुई। Portal Upload/Save अभी बाकी है।"
                             }
