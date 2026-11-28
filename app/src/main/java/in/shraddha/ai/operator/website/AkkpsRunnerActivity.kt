@@ -49,6 +49,7 @@ class AkkpsRunnerActivity : Activity() {
     private var pendingBoundaryReopenPlotId: String? = null
     private var pendingBoundaryReopenUrl: String? = null
     private var pendingBoundaryReopenAfterLoad = false
+    private var pendingBoundaryReopenGeometrySignature: String? = null
     private var pendingAwdRepeaterSection: String? = null
     private var pendingAwdRepeaterUrl: String? = null
     private var pendingAwdRepeaterBaseline = -1
@@ -1240,6 +1241,18 @@ class AkkpsRunnerActivity : Activity() {
                                 .flatMap(e=>[...e.files].map(f=>f.name)).filter(n=>/\\.kml$/i.test(n));
                               if(files.length!==1 || !files[0].toLowerCase().includes(__PLOT_ID__.toLowerCase()))
                                 return JSON.stringify({status:'kml_not_attached'});
+                              const polygonPaths=[...document.querySelectorAll('.leaflet-overlay-pane svg path,.ol-overlaycontainer svg path,svg path[data-geometry-type*="polygon" i],svg path[data-layer-type*="polygon" i]')]
+                                .filter(visible).filter(e=>{
+                                  const d=(e.getAttribute('d')||'').trim();
+                                  const fill=(e.getAttribute('fill')||getComputedStyle(e).fill||'').trim();
+                                  return d.length>8 && fill && fill!=='none' && fill!=='transparent';
+                                }).map(e=>({
+                                  d:(e.getAttribute('d')||'').replace(/\\s+/g,' ').trim(),
+                                  cls:String(e.getAttribute('class')||'').trim(),
+                                  fillRule:e.getAttribute('fill-rule')||'',
+                                  fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
+                                })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+                              const geometrySignature=polygonPaths.length?JSON.stringify(polygonPaths).slice(0,20000):'';
                               const wanted=norm(__LABEL__);
                               const buttons=[...forms[0].querySelectorAll('button,input[type=button], [role=button]')]
                                 .filter(visible).filter(e=>{
@@ -1255,7 +1268,7 @@ class AkkpsRunnerActivity : Activity() {
                               if(button.disabled || button.getAttribute('aria-disabled')==='true')
                                 return JSON.stringify({status:'button_disabled'});
                               button.click();
-                              return JSON.stringify({status:'clicked',file:files[0],label:wanted});
+                              return JSON.stringify({status:'clicked',file:files[0],label:wanted,geometrySignature,polygonPathCount:polygonPaths.length});
                             })()
                         """.trimIndent()
                             .replace("__PLOT_ID__", JSONObject.quote(plotId))
@@ -1268,7 +1281,8 @@ class AkkpsRunnerActivity : Activity() {
                                 pendingBoundaryReopenRecordId = null
                                 pendingBoundaryReopenPlotId = null
                                 pendingBoundaryReopenUrl = null
-                                status.text = "AKKPS का exact non-submit Boundary Upload button click हुआ। Server response verify करने के लिए ‘verify boundary upload’ बोलें। दोबारा click न करें।"
+                                pendingBoundaryReopenGeometrySignature = result.optString("geometrySignature").takeIf { it.isNotBlank() }
+                                status.text = "AKKPS का exact non-submit Boundary Upload button click हुआ। Pre-save polygon paths: ${result.optInt("polygonPathCount")}। Server response verify करने के लिए ‘verify boundary upload’ बोलें। दोबारा click न करें।"
                             } else {
                                 pendingBoundaryUploadPreparedAt = 0L
                                 pendingBoundaryUploadPlotId = null
@@ -1430,21 +1444,37 @@ class AkkpsRunnerActivity : Activity() {
               const roots=preferred.filter(e=>!preferred.some(other=>other!==e && other.contains(e)));
               const layerSelectors=['.leaflet-overlay-pane svg path','.ol-overlaycontainer svg path',
                 '[data-layer-type*="polygon" i]','[data-geometry-type="polygon" i]'];
+              const polygonPaths=[...document.querySelectorAll('.leaflet-overlay-pane svg path,.ol-overlaycontainer svg path,svg path[data-geometry-type*="polygon" i],svg path[data-layer-type*="polygon" i]')]
+                .filter(visible).filter(e=>{
+                  const d=(e.getAttribute('d')||'').trim();
+                  const fill=(e.getAttribute('fill')||getComputedStyle(e).fill||'').trim();
+                  return d.length>8 && fill && fill!=='none' && fill!=='transparent';
+                }).map(e=>({
+                  d:(e.getAttribute('d')||'').replace(/\\s+/g,' ').trim(),
+                  cls:String(e.getAttribute('class')||'').trim(),
+                  fillRule:e.getAttribute('fill-rule')||'',
+                  fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
+                })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+              const geometrySignature=polygonPaths.length?JSON.stringify(polygonPaths).slice(0,20000):'';
               const layerHints=layerSelectors.reduce((sum,sel)=>sum+
                 [...document.querySelectorAll(sel)].filter(visible).length,0);
-              return JSON.stringify({mapCount:roots.length,layerHints,route:location.pathname});
+              return JSON.stringify({mapCount:roots.length,layerHints,route:location.pathname,geometrySignature,polygonPathCount:polygonPaths.length});
             })()
         """.trimIndent()
         web.evaluateJavascript(script) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             val mapCount = result?.optInt("mapCount", -1) ?: -1
             val layerHints = result?.optInt("layerHints", 0) ?: 0
+            val reopenedSignature = result?.optString("geometrySignature")?.takeIf { it.isNotBlank() }
+            val fingerprintMatches = pendingBoundaryReopenGeometrySignature != null && pendingBoundaryReopenGeometrySignature == reopenedSignature
             val sameRecord = pendingBoundaryReopenRecordId == recordId && pendingBoundaryReopenPlotId == plotId
             if (sameRecord && mapCount == 1 && layerHints > 0) {
-                status.text = "AKKPS page reload हुआ और एक map में $layerHints visible vector-layer hints मिले • Plot $plotId • Record $recordId। यह map/layer evidence है, exact polygon identity या server persistence का स्वतंत्र प्रमाण नहीं।"
+                val geometryNote = if (fingerprintMatches) " Pre-save और reopen SVG geometry fingerprint match हुआ; यह supporting evidence है, Record ID से polygon का स्वतंत्र server-side संबंध प्रमाणित नहीं करता।" else " Pre-save और reopen geometry fingerprint match नहीं हुआ या उपलब्ध नहीं है।"
+                status.text = "AKKPS page reload हुआ और एक map में $layerHints visible vector-layer hints मिले • Plot $plotId • Record $recordId।" + geometryNote
             } else {
                 status.text = "AKKPS page reload हुआ, लेकिन unique map/vector-layer evidence पूरा नहीं मिला (maps=$mapCount, hints=$layerHints)। Boundary persistence अभी uncertain है; दोबारा upload न करें।"
             }
+            pendingBoundaryReopenGeometrySignature = null
             AlertDialog.Builder(this)
                 .setTitle("AKKPS Map Reopen निरीक्षण")
                 .setMessage(status.text.toString())
