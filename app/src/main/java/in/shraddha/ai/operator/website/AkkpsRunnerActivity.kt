@@ -132,7 +132,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         if (!incoming.isNullOrBlank() && incoming.length <= 3000) {
-            if (Regex("(?i)\\b(password|passcode|otp|pin|captcha|security code|verification code)\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(incoming)) {
+            if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(incoming)) {
                 status.text = "Credential/OTP सामग्री वाला command रोक दिया गया।"
                 return
             }
