@@ -8,8 +8,9 @@ class AkkpsRunnerPageWorkflowPolicyTest {
     @Test
     fun parsesPlotIdAndBoundaryVoiceActions() {
         assertEquals("PLOT-123", AkkpsRunnerPageWorkflowPolicy.plotId("set plot id PLOT-123"))
-        assertEquals("PLOT_44", AkkpsRunnerPageWorkflowPolicy.plotId("प्लॉट आईडी PLOT_44"))
+        assertEquals("PLOT_44", AkkpsRunnerPageWorkflowPolicy.plotId("प्लॉट आईडी सेट करें PLOT_44"))
         assertNull(AkkpsRunnerPageWorkflowPolicy.plotId("set plot id PLOT/123"))
+        assertNull(AkkpsRunnerPageWorkflowPolicy.plotId("plot id PLOT-123"))
         assertEquals(AkkpsBoundaryVoiceAction.INSPECT_MAP, AkkpsRunnerPageWorkflowPolicy.boundaryAction("inspect live map"))
         assertEquals(AkkpsBoundaryVoiceAction.VERIFY_UPLOAD, AkkpsRunnerPageWorkflowPolicy.boundaryAction("verify boundary upload"))
         assertEquals(AkkpsBoundaryVoiceAction.PREPARE_UPLOAD, AkkpsRunnerPageWorkflowPolicy.boundaryAction("prepare boundary for upload"))
