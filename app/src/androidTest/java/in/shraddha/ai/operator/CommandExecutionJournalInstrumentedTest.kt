@@ -148,6 +148,29 @@ class CommandExecutionJournalInstrumentedTest {
         )
     }
 
+    @Test fun unresolvedExternalActionBlocksDifferentCommandsUntilReconciled() {
+        val created = requireNotNull(plan())
+        assertNotNull(journal.markRunning(created.id, "step-1"))
+        assertEquals(
+            CommandStepState.UNCERTAIN,
+            requireNotNull(journal.finish(created.id, "step-1", CommandStepState.UNCERTAIN, "process_interrupted")).state
+        )
+        assertTrue(journal.hasUnresolvedSideEffects())
+        assertNull(journal.createPlan(
+            "send a different message to another recipient",
+            listOf(CommandTaskStep("step-2", "messaging", "send"))
+        ))
+
+        assertNotNull(journal.reconcile(
+            created.id, "step-1", CommandStepState.SUCCEEDED, "receipt_verified"
+        ))
+        assertFalse(journal.hasUnresolvedSideEffects())
+        assertNotNull(journal.createPlan(
+            "send a different message to another recipient",
+            listOf(CommandTaskStep("step-2", "messaging", "send"))
+        ))
+    }
+
     @Test fun failedStepRetriesOnlyWithinAttemptLimit() {
         val created = requireNotNull(plan())
         journal.markRunning(created.id, "step-1", maxAttempts = 2)
