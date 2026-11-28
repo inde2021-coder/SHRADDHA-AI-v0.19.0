@@ -312,10 +312,10 @@ class AkkpsRunnerActivity : Activity() {
                     }
                     val preparedBoundary = pendingBoundaryUploadUri
                     val acceptedTypes = params.acceptTypes.orEmpty()
-                    val acceptsKml = acceptedTypes.isEmpty() || acceptedTypes.any { type ->
-                        val value = type.trim().lowercase()
-                        value.isBlank() || value == "*/*" ||
-                            value.contains("kml") || value.contains("application/octet-stream")
+                    // Attach automatically only when the portal explicitly declares KML.
+                    // Generic/empty file inputs must never receive a boundary by accident.
+                    val acceptsKml = acceptedTypes.any { type ->
+                        type.trim().lowercase().contains("kml")
                     }
                     val currentPlotId = plotIdInput.text.toString().trim()
                     if (preparedBoundary != null && acceptsKml &&
