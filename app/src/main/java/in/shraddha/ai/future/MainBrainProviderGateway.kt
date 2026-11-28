@@ -45,7 +45,6 @@ object MainBrainProviderGateway {
     /** Secure realtime Gemini Live session token; raw provider credentials never enter the UI. */
     suspend fun fetchLiveVoiceToken(context: Context): String {
         OnlineAiConsent.requireAllowed(context)
-        CouncilCostBudget.requireUsageCountersAvailable(context, "Gemini Live voice")
         return VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
     }
 
@@ -58,7 +57,6 @@ object MainBrainProviderGateway {
         onChunk: (String) -> Unit
     ): StreamingTextResult {
         if (!OnlineAiConsent.isAllowed(context)) return StreamingTextResult(403, "Online AI is disabled by the user.", null)
-        CouncilCostBudget.requireUsageCountersAvailable(context, "Streaming Gemini generation")
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
         val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(context.applicationContext, apiKey) }
@@ -122,8 +120,6 @@ object MainBrainProviderGateway {
         val provider = providerName.uppercase()
         if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
-        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, provider) }
-            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
         // Hybrid routing: use the authenticated HTTPS agent when this provider is configured there.
         // A failed configured cloud route is surfaced; it is not silently retried against a
@@ -172,14 +168,11 @@ object MainBrainProviderGateway {
         prompt: String
     ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
         OnlineAiConsent.requireAllowed(context)
-        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, providerName) }
-            .getOrElse { error(it.message ?: "Monthly API budget blocked this request.") }
         VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
             } else {
-                CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
-                null
+                        null
             }
             return cloud.text to usage
         }
