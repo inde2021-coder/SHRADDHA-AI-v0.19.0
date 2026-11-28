@@ -14,7 +14,7 @@ class AkkpsSubmitTargetPolicyTest {
     }
 
     @Test fun recognizesFinalSubmitButtonsButNotDraftButtons() {
-        listOf("Submit", "Submit Report", "Submit Plot", "Submit Registration", "सबमिट करें", "जमा करें").forEach {
+        listOf("Submit", "Submit!", "Submit Report", "Submit Plot", "Submit Registration", "सबमिट करें", "जमा करें").forEach {
             assertTrue(it, AkkpsSubmitTargetPolicy.isExplicitSubmitLabel(it))
         }
         listOf("Save Draft", "Save", "Add visit", "Remove", "Cancel", "").forEach {
