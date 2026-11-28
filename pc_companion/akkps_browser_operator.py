@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import json
 import re
+import hashlib
 
 ALLOWED_HOSTS = {"www.akkps.ngo", "akkps.ngo"}
 DEFAULT_HOME = "https://www.akkps.ngo"
@@ -238,6 +239,8 @@ class AkkpsBrowserOperator:
         self._context = None
         self._page = None
         self._last_repeater_snapshot = None
+        self._boundary_pre_save_signature = None
+        self._boundary_pre_save_plot_id = None
 
     @property
     def page(self):
@@ -969,6 +972,32 @@ class AkkpsBrowserOperator:
             "next_step": "Review the visible map and use the portal's own Upload/Save control with separate confirmation."
         }
 
+    def _visible_polygon_render_fingerprint(self):
+        """Fingerprint visible SVG polygon geometry without exporting coordinates."""
+        data = self.page.evaluate("""() => {
+          const visible = e => !!(e && e.getClientRects().length &&
+            getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden');
+          const selectors = ['.leaflet-overlay-pane svg path', '.ol-overlaycontainer svg path',
+            'svg path[data-geometry-type*="polygon" i]', 'svg path[data-layer-type*="polygon" i]'];
+          const paths = [...new Set(selectors.flatMap(s => {
+            try { return [...document.querySelectorAll(s)]; } catch (_) { return []; }
+          }))].filter(visible).filter(e => {
+            const d = (e.getAttribute('d') || '').trim();
+            const fill = (e.getAttribute('fill') || getComputedStyle(e).fill || '').trim();
+            return d.length > 8 && fill && fill !== 'none' && fill !== 'transparent';
+          }).map(e => ({
+            d: (e.getAttribute('d') || '').replace(/\\s+/g, ' ').trim(),
+            cls: String(e.getAttribute('class') || '').trim(),
+            fillRule: e.getAttribute('fill-rule') || '',
+            fill: e.getAttribute('fill') || getComputedStyle(e).fill || ''
+          })).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+          return {count: paths.length, paths};
+        }""")
+        paths = data.get("paths", []) if isinstance(data, dict) else []
+        if not paths:
+            return None, 0
+        canonical = json.dumps(paths, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), len(paths)
     def upload_boundary_kml_after_confirmation(self, upload_button_label: str):
         """Use one explicit non-submit Plot boundary Upload button and require a server record ID."""
         label = " ".join(str(upload_button_label or "").split())
@@ -1001,6 +1030,9 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Exact boundary Upload/Save control is missing, ambiguous or disabled.")
         if (button.first.get_attribute("type") or "").casefold() != "button":
             raise RuntimeError("Boundary control may submit the whole Plot record; refusing to click it.")
+        route_plot_id = _runner_plot_route_id(self.page.url)
+        self._boundary_pre_save_signature, pre_save_path_count = self._visible_polygon_render_fingerprint()
+        self._boundary_pre_save_plot_id = route_plot_id
         origin = urlparse(self.page.url).netloc.casefold()
         clicked = False
         try:
@@ -1018,7 +1050,8 @@ class AkkpsBrowserOperator:
             return {
                 "clicked": clicked, "boundary_upload_verified": False,
                 "outcome": "uncertain", "automatic_retry": False,
-                "record_submitted": False, "selected_file": selected_kml[0]
+                "record_submitted": False, "selected_file": selected_kml[0],
+                "pre_save_polygon_path_count": pre_save_path_count
             }
         try:
             payload = response.json()
@@ -1032,7 +1065,8 @@ class AkkpsBrowserOperator:
             "boundary_upload_verified": bool(record_id), "record_id": record_id,
             "outcome": "verified" if record_id else "uncertain",
             "automatic_retry": False, "record_submitted": False,
-            "selected_file": selected_kml[0]
+            "selected_file": selected_kml[0],
+            "pre_save_polygon_path_count": pre_save_path_count
         }
 
     def reopen_plot_map_after_upload(self, record_id: str):
@@ -1062,13 +1096,20 @@ class AkkpsBrowserOperator:
         map_count = len(evidence.get("maps", []))
         layer_evidence = evidence.get("layer_evidence", {})
         visible_hints = sum(int(value or 0) for value in layer_evidence.values())
+        after_signature, after_path_count = self._visible_polygon_render_fingerprint()
+        before_signature = self._boundary_pre_save_signature
+        fingerprint_matches = bool(self._boundary_pre_save_plot_id == plot_id_before and before_signature and after_signature and before_signature == after_signature)
+        self._boundary_pre_save_signature = None
+        self._boundary_pre_save_plot_id = None
         return {
             "reopened": True, "same_plot_route": True, "plot_id": plot_id_before,
             "record_id": record_id, "map_count_after_reload": map_count,
             "visible_vector_layer_hints_after_reload": visible_hints,
+            "post_reload_polygon_path_count": after_path_count,
+            "rendered_polygon_fingerprint_matches": fingerprint_matches,
             "polygon_persistence_verified": False,
-            "outcome": "map_reopened_with_layer_hints" if map_count == 1 and visible_hints > 0 else "reopened_but_boundary_not_visibly_confirmed",
-            "note": "The same authenticated Plot route was reloaded after a verified write response. Vector-layer hints are not proof that this exact record's polygon persisted; compare the visible Plot boundary manually."
+            "outcome": "rendered_geometry_matches_before_and_after_reload" if fingerprint_matches else ("reopened_but_rendered_geometry_did_not_match" if before_signature else "reopened_but_no_comparable_polygon_fingerprint"),
+            "note": "A matching pre-save/post-reload SVG fingerprint is supporting visual evidence only. It does not independently bind the rendered polygon to this Record ID; verify the Plot boundary in AKKPS before treating persistence as complete."
         }
 
     def inspect_map_boundary(self):
