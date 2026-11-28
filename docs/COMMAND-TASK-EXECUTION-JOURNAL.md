@@ -24,7 +24,7 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - UNCERTAIN is never automatically replayed. An adapter independently inspects the remote side effect and calls reconciliation.
 - While any step is RUNNING or UNCERTAIN, the voice entry point blocks all new external actions, even if the next command uses different wording. This avoids bypassing an unresolved send/submit by rephrasing it.
 - Voice-tool results with `queued`, ambiguous `error`/`failed`, or missing/unknown status remain `UNCERTAIN`; queue acceptance is not proof of external completion, and a tool error may follow a partial side effect.
-- SUCCEEDED, BLOCKED and SKIPPED are terminal.
+- SUCCEEDED, BLOCKED and SKIPPED are terminal; FAILED becomes terminal only after its second verified failure.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
 
 ## Integration boundary
