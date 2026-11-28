@@ -1079,9 +1079,15 @@ class AkkpsRunnerActivity : Activity() {
                               const visible = e => !!(e && e.getClientRects().length &&
                                 getComputedStyle(e).display !== 'none' &&
                                 getComputedStyle(e).visibility !== 'hidden');
-                              const maps = [...document.querySelectorAll(
-                                '.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,[role=application][aria-label*=map i]'
-                              )].filter(visible);
+                              const mapSelector='.leaflet-container,.mapboxgl-map,.ol-viewport,.gm-style,'+
+                                '[data-testid*="map" i],[role=application][aria-label*=map i],[aria-label*=map i]';
+                              const candidates=[...document.querySelectorAll(mapSelector)].filter(visible);
+                              const engineRoots=candidates.filter(e=>
+                                e.classList.contains('leaflet-container') || e.classList.contains('mapboxgl-map') ||
+                                e.classList.contains('ol-viewport') || e.classList.contains('gm-style'));
+                              const preferred=engineRoots.length?engineRoots:candidates;
+                              const maps=preferred.filter(e=>
+                                !preferred.some(other=>other!==e && other.contains(e)));
                               if (maps.length !== 1) return JSON.stringify({
                                 ok:false, reason:'expected_one_visible_map', mapCount:maps.length
                               });
