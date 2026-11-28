@@ -26,7 +26,7 @@ class AkkpsFarmerCardOcrParserTest {
     }
 
     @Test fun ignoresUnlabelledAndSensitiveValues() {
-        val result = AkkpsFarmerCardOcrParser.parse("9876543210\nAadhaar: 123456789012\nPassword: secret")
+        val result = AkkpsFarmerCardOcrParser.parse("9876543210\nAadhaar: 123456789012\nFarmer ID: 1234 5678 9012\nPassword: secret")
         assertTrue(result.assignments.isEmpty())
         assertEquals(listOf("name", "farmer_id", "village", "district"), result.missing)
     }
