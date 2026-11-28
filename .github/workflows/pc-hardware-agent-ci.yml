@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - feature/complete-pending-shraddha-features
-      - feature/akkps-universal-browser-operator
       - fix/live-app-operator-glass-ui-and-actions
     paths:
       - "pc_companion/**"
