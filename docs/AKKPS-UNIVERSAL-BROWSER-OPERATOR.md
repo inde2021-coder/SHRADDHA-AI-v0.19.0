@@ -4,7 +4,7 @@ Shraddha AI has two entry points for the user's authorized AKKPS account.
 
 ## Android — primary Runner workspace
 
-The Main Brain tool `open_akkps_runner` opens the existing native `AkkpsRunnerActivity` WebView. The user signs in directly on the website; credentials and OTPs are never sent to the model.
+The Main Brain tool `open_akkps_runner` opens the existing native `AkkpsRunnerActivity` WebView. It can also pass one bounded, explicit user command into the Runner; after the user signs in and the Runner route loads, the command is processed. The user signs in directly on the website; credentials and OTPs are never sent to the model.
 
 The Runner workspace already includes these observed routes:
 
@@ -15,7 +15,7 @@ The Runner workspace already includes these observed routes:
 - Profile: `/runner/profile`
 - Data Sync: `/runner/sync`
 
-It includes page inspection, Farmer Card OCR, Farmer/Plot/AWD field mapping, missing-field checks, explicit submit intent, and server-response verification. A submit is considered server-confirmed only when the observed same-origin write response is successful and contains a record ID. A toast or button click alone is not enough. Uncertain writes are not automatically retried.
+It includes page inspection, Farmer Card OCR, Farmer/Plot/AWD field mapping, missing-field checks, explicit submit intent, and server-response verification. Create commands can route to the matching Farmer/Plot/AWD form before field mapping; submit still pauses at a separate confirmation dialog. A submit is considered server-confirmed only when the observed same-origin write response is successful and contains a record ID. A toast or button click alone is not enough. Uncertain writes are not automatically retried.
 
 ## Windows — visible browser companion
 
