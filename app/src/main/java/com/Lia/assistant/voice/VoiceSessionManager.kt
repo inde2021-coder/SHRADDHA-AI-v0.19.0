@@ -90,6 +90,7 @@ object VoiceSessionManager {
     fun isCurrentSession(epoch: Long): Boolean = sessionEpoch.get() == epoch
     fun isActiveNow(): Boolean = _isActive.value
 
+    @Synchronized
     fun start(context: Context) {
         if (_isActive.value) return
         val application = context.applicationContext
@@ -180,6 +181,7 @@ object VoiceSessionManager {
     }
 
     /** Starts a user-selected, local-only speech session. This path has no cloud fallback. */
+    @Synchronized
     fun startOffline(context: Context, language: IndicConformerRuntime.Language) {
         stop()
         val application = context.applicationContext
@@ -634,6 +636,7 @@ object VoiceSessionManager {
         }
     }
 
+    @Synchronized
     fun stop() {
         val preserveError = _state.value == NovaOrbState.ERROR
         val previousError = _lastError.value
