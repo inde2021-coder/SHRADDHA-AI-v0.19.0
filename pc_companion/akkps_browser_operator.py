@@ -531,27 +531,46 @@ class AkkpsBrowserOperator:
         }
 
 
+    def _awd_section(self, section_label: str):
+        """Resolve one exact AWD section container; never fall back to the whole form."""
+        heading = self.page.get_by_text(section_label, exact=True)
+        if heading.count() != 1 or not heading.first.is_visible():
+            raise RuntimeError("The repeated-entry section heading is missing or ambiguous.")
+        section = heading.first.locator(
+            "xpath=ancestor::*[self::fieldset or self::section or @data-section or @role='group'][1]"
+        )
+        if section.count() != 1 or not section.first.is_visible():
+            raise RuntimeError("The AWD section has no unique accessible container; refusing an unscoped Add action.")
+        return section.first
+
     def add_repeated_entry(self, section_label: str, add_button_label: str):
-        """Add one AWD/repeater row only; never submit or infer row contents."""
+        """Add one blank row only inside the exact recognized AWD section."""
         section_label = " ".join(str(section_label or "").split())
         add_button_label = " ".join(str(add_button_label or "").split())
         allowed_sections = {
             "drying events", "drying event", "drying event dates", "drying dates",
             "re-flooding events", "re-flooding dates", "reflooding dates",
-            "fertilizer applications", "fertilizer application dates", "field visits",
-            "historical yields", "water level readings"
+            "fertilizer applications", "fertilizer application dates", "other fertilizer rows",
+            "field visits", "field visit audit logs", "audit logs",
+            "historical yields", "historical yield rows",
+            "water level readings", "water level at each visit", "visit readings"
         }
         normalized = section_label.casefold()
         section_aliases = {
             "सूखने की तारीख": "drying event dates", "सूखने की तारीखें": "drying event dates",
             "पुनः बाढ़ की तारीख": "reflooding dates", "पुनः बाढ़ की तारीखें": "reflooding dates",
-            "खाद डालने की तारीख": "fertilizer application dates", "खाद डालने की तारीखें": "fertilizer application dates",
-            "खेत का दौरा": "field visits", "ऐतिहासिक उपज": "historical yields",
-            "जल स्तर रीडिंग": "water level readings"
+            "खाद डालने की तारीख": "fertilizer application dates",
+            "खाद डालने की तारीखें": "fertilizer application dates",
+            "अन्य खाद": "other fertilizer rows", "अन्य उर्वरक": "other fertilizer rows",
+            "खेत का दौरा": "field visits", "खेत के दौरे": "field visits",
+            "ऐतिहासिक उपज": "historical yield rows",
+            "जल स्तर रीडिंग": "water level readings",
+            "हर दौरे का जल स्तर": "water level at each visit",
+            "दौरे का रिकॉर्ड": "audit logs"
         }
         normalized = section_aliases.get(normalized, normalized)
         if normalized not in allowed_sections:
-            raise ValueError("Only known AWD repeated-entry sections are supported.")
+            raise ValueError("Only recognized AWD repeated-entry sections are supported.")
         if not add_button_label or len(add_button_label) > 80 or SENSITIVE_LABEL.search(add_button_label):
             raise ValueError("A safe, exact visible Add-row label is required.")
         validate_runner_url(self.page.url)
@@ -560,32 +579,32 @@ class AkkpsBrowserOperator:
         forms = self.page.locator("form:visible")
         if forms.count() != 1:
             raise RuntimeError("Expected exactly one visible AWD form.")
-        form = forms.first
-        heading = self.page.get_by_text(section_label, exact=True)
-        if heading.count() != 1 or not heading.first.is_visible():
-            raise RuntimeError("The repeated-entry section is missing or ambiguous.")
-        add = form.get_by_role("button", name=add_button_label, exact=True)
+        section = self._awd_section(section_label)
+        add = section.get_by_role("button", name=add_button_label, exact=True)
         if add.count() != 1 or not add.first.is_visible() or not add.first.is_enabled():
-            raise RuntimeError("The exact Add-row control is missing, ambiguous or disabled.")
+            raise RuntimeError("The exact Add-row control is missing, ambiguous or disabled in this section.")
         if (add.first.get_attribute("type") or "").casefold() != "button":
             raise RuntimeError("Add-row control is not explicitly type=button; refusing a possible form submit.")
-        field_locator = form.locator("input,select,textarea")
-        before = field_locator.count()
-        baseline_signature = field_locator.evaluate_all(
+        fields = section.locator("input,select,textarea")
+        before = fields.count()
+        baseline_signature = fields.evaluate_all(
             "(els) => els.map(e => [e.tagName, e.type || '', e.name || '', e.id || '', e.placeholder || ''])"
         )
         add.first.click()
         self.page.wait_for_timeout(250)
-        after = form.locator("input,select,textarea").count()
+        after = section.locator("input,select,textarea").count()
         if after <= before:
-            raise RuntimeError("No new visible form fields appeared; row addition was not verified.")
+            raise RuntimeError("No new fields appeared inside the selected AWD section; row addition was not verified.")
         self._last_repeater_snapshot = {
-            "section": section_label, "url": self.page.url, "baseline_field_count": before,
-            "baseline_signature": baseline_signature
+            "section": section_label, "url": self.page.url,
+            "baseline_signature": baseline_signature,
+            "baseline_field_count": before
         }
-        return {"section": section_label, "fields_before": before, "fields_after": after,
-                "row_added": True, "submitted": False,
-                "next_step": "Review and fill the newest row with explicit values."}
+        return {
+            "section": section_label, "fields_before": before, "fields_after": after,
+            "row_added": True, "submitted": False,
+            "next_step": "Review and fill the newest row with explicit user-provided values."
+        }
 
     def _plan_latest_repeated_entry(self, values: dict[str, str]):
         snapshot = self._last_repeater_snapshot
@@ -595,31 +614,34 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Repeated AWD entries are available only on AWD Reports pages.")
         if not isinstance(values, dict) or not values or len(values) > 30:
             raise ValueError("Provide 1–30 exact field-label/value pairs for the newest row.")
-        forms = self.page.locator("form:visible")
-        if forms.count() != 1:
-            raise RuntimeError("Expected exactly one visible AWD form.")
-        form = forms.first
-        fields = form.locator("input,select,textarea")
+        if forms := self.page.locator("form:visible"):
+            if forms.count() != 1:
+                raise RuntimeError("Expected exactly one visible AWD form.")
+        section = self._awd_section(snapshot["section"])
+        fields = section.locator("input,select,textarea")
         baseline = int(snapshot["baseline_field_count"])
         if fields.count() <= baseline:
-            raise RuntimeError("The new AWD row is no longer present.")
+            raise RuntimeError("The new AWD row is no longer present in the selected section.")
         current_signature = fields.evaluate_all(
             "(els) => els.map(e => [e.tagName, e.type || '', e.name || '', e.id || '', e.placeholder || ''])"
         )
         if current_signature[:baseline] != snapshot.get("baseline_signature"):
-            raise RuntimeError("The AWD form changed after the row was added; refusing to fill a different form.")
+            raise RuntimeError("The AWD section changed after the row was added; refusing to fill a different row.")
         planned = []
         for label, value in values.items():
             label = " ".join(str(label or "").split())
             if not label or not isinstance(value, str) or len(value) > 2000 or SENSITIVE_LABEL.search(label):
                 raise ValueError("Every repeated-row field needs a safe exact label and text value.")
-            matches = form.get_by_label(label, exact=True)
+            matches = section.get_by_label(label, exact=True)
             if matches.count() == 0:
-                matches = form.get_by_placeholder(label, exact=True)
+                matches = section.get_by_placeholder(label, exact=True)
             candidates = []
             for index in range(matches.count()):
                 candidate = matches.nth(index)
-                position = candidate.evaluate("(e) => [...e.form.querySelectorAll('input,select,textarea')].indexOf(e)")
+                position = candidate.evaluate(
+                    "(e) => [...e.closest('fieldset,section,[data-section],[role=group]')"
+                    "?.querySelectorAll('input,select,textarea') || []].indexOf(e)"
+                )
                 if position >= baseline:
                     candidates.append(candidate)
             if len(candidates) != 1:
@@ -636,9 +658,11 @@ class AkkpsBrowserOperator:
                 if value not in options:
                     raise RuntimeError(f"{value!r} is not an exact option for {label!r}.")
             planned.append((label, value, field))
-        return {"section": snapshot["section"], "changes": [
-            {"field": label, "value": value} for label, value, _ in planned
-        ], "submitted": False, "requires_confirmation": True}, planned
+        return {
+            "section": snapshot["section"],
+            "changes": [{"field": label, "value": value} for label, value, _ in planned],
+            "submitted": False, "requires_confirmation": True
+        }, planned
 
     def preview_latest_repeated_entry(self, values: dict[str, str]):
         preview, _ = self._plan_latest_repeated_entry(values)
@@ -656,8 +680,10 @@ class AkkpsBrowserOperator:
                 field.fill(value)
             filled.append(label)
         self._last_repeater_snapshot = None
-        return {"section": preview["section"], "filled_fields": filled,
-                "submitted": False, "requires_separate_submit_confirmation": True}
+        return {
+            "section": preview["section"], "filled_fields": filled,
+            "submitted": False, "requires_separate_submit_confirmation": True
+        }
 
     def choose_autocomplete_option(self, field_label: str, query: str, exact_option: str):
         """Choose one exact visible autocomplete suggestion after a user-reviewed query."""
@@ -701,6 +727,14 @@ class AkkpsBrowserOperator:
             raise ValueError("Choose an existing PDF, JPG or PNG document.")
         if path.stat().st_size <= 0 or path.stat().st_size > 10 * 1024 * 1024:
             raise ValueError("Document must be non-empty and no larger than 10 MB.")
+        signature = path.read_bytes()[:16]
+        valid_signature = (
+            (path.suffix.casefold() == ".pdf" and signature.startswith(b"%PDF-")) or
+            (path.suffix.casefold() in {".jpg", ".jpeg"} and signature.startswith(b"\\xff\\xd8\\xff")) or
+            (path.suffix.casefold() == ".png" and signature.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+        )
+        if not valid_signature:
+            raise ValueError("Document contents do not match the selected PDF/JPEG/PNG extension.")
         label = " ".join(str(field_label or "").split())
         if not label or SENSITIVE_LABEL.search(label):
             raise ValueError("A safe exact document field label is required.")
