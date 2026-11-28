@@ -35,6 +35,7 @@ object ActionExecutor {
 
 
             "inspect_akkps_runner" -> {
+                `in`.shraddha.ai.operator.website.AkkpsPageInventory.clear(context)
                 val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
                     .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_INSPECT, true)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
