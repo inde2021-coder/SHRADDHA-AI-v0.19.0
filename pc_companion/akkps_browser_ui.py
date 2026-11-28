@@ -64,6 +64,7 @@ class AkkpsBrowserWindow:
         ttk.Button(workflows, text="Attach document…", command=self.attach_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Upload attached document…", command=self.upload_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Attach boundary KML…", command=self.attach_boundary_kml).pack(side="left", padx=3)
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
@@ -248,6 +249,35 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Map inspection failed", str(exc), parent=self.window)
+
+    def attach_boundary_kml(self):
+        try:
+            label = simpledialog.askstring(
+                "Attach Plot boundary KML",
+                "Exact visible boundary/KML file field label on the AKKPS Plot page:",
+                parent=self.window
+            )
+            if not label: return
+            path = filedialog.askopenfilename(
+                parent=self.window, title="Choose reviewed AKKPS boundary KML",
+                filetypes=[("KML boundary", "*.kml")]
+            )
+            if not path: return
+            preview = {
+                "field": label, "file_name": Path(path).name,
+                "action": "Attach KML to the visible Plot form only",
+                "portal_upload": False, "record_submit": False
+            }
+            if not messagebox.askyesno(
+                "Confirm boundary attachment",
+                json.dumps(preview, ensure_ascii=False, indent=2),
+                parent=self.window
+            ): return
+            result = self.operator.attach_boundary_kml(label, path)
+            self.status.set("KML attached to Plot form. Review map; portal Upload/Save is still separate.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Boundary KML attachment blocked", str(exc), parent=self.window)
 
     def submit(self):
         if not messagebox.askyesno("Confirm AKKPS submission",
