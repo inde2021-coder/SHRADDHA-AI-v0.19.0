@@ -206,6 +206,15 @@ def _safe_action_label(value: str) -> str | None:
     return None
 
 
+def _runner_plot_route_id(url: str) -> str | None:
+    path = urlparse(url).path.casefold().rstrip("/")
+    parts = path.strip("/").split("/")
+    if (len(parts) >= 3 and parts[0] == "runner" and parts[1] == "plots" and
+            parts[2] not in {"new", "create-boundary", "create-land-map"}):
+        return parts[2]
+    return None
+
+
 def _safe_runner_location(url: str) -> tuple[str, str]:
     parsed = urlparse(url)
     path = parsed.path.rstrip("/") or "/"
@@ -919,6 +928,9 @@ class AkkpsBrowserOperator:
         route = urlparse(self.page.url).path.casefold().rstrip("/")
         if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
             raise RuntimeError("KML boundary attachment is allowed only in the AKKPS Runner Plots workflow.")
+        route_plot_id = _runner_plot_route_id(self.page.url)
+        if route_plot_id and route_plot_id not in path.stem.casefold():
+            raise ValueError("KML filename must include the active Plot ID to prevent attaching another Plot's boundary.")
         forms = self.page.locator("form:visible")
         if forms.count() != 1:
             raise RuntimeError("Expected exactly one visible Plot boundary form.")
@@ -968,6 +980,9 @@ class AkkpsBrowserOperator:
             selected_kml.extend(name for name in names if str(name).casefold().endswith(".kml"))
         if len(selected_kml) != 1:
             raise RuntimeError("Select exactly one reviewed KML boundary file before portal upload.")
+        route_plot_id = _runner_plot_route_id(self.page.url)
+        if route_plot_id and route_plot_id not in Path(selected_kml[0]).stem.casefold():
+            raise RuntimeError("Selected KML does not match the active Plot ID; upload was blocked.")
         button = forms.first.get_by_role("button", name=label, exact=True)
         if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
             raise RuntimeError("Exact boundary Upload/Save control is missing, ambiguous or disabled.")
