@@ -29,6 +29,16 @@ class CommandExecutionJournalInstrumentedTest {
     private fun plan(command: String = "send private message to +919876543210") =
         journal.createPlan(command, listOf(CommandTaskStep("step-1", "messaging", "send")))
 
+    @Test fun startupGateOpensOnlyAfterSuccessfulJournalRecovery() {
+        assertTrue(CommandExecutionJournalStartup.recover(context))
+        assertTrue(CommandExecutionJournalStartup.isReady())
+
+        context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
+            .edit().putString("plans_v1", "{broken").commit()
+        assertFalse(CommandExecutionJournalStartup.recover(context))
+        assertFalse(CommandExecutionJournalStartup.isReady())
+    }
+
     @Test fun persistsPlanAndDeduplicatesIdenticalRecentCommand() {
         val first = requireNotNull(plan())
         val second = requireNotNull(plan())
