@@ -757,7 +757,7 @@ class AkkpsRunnerActivity : Activity() {
               const n=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,120);
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
-              const sensitiveLabel=/password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड/i;
+              const sensitiveLabel=/\\b(password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड/i;
               const labelFor=e=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
