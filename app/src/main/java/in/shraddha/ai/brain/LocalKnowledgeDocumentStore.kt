@@ -53,18 +53,23 @@ class LocalKnowledgeDocumentStore(context: Context) {
         sourceLabel: String,
         sourceUri: String? = null,
         content: String,
-        importedAt: Long = System.currentTimeMillis()
+        importedAt: Long = System.currentTimeMillis(),
+        internalBundled: Boolean = false
     ): Result<Unit> = runCatching {
         require(consent) { "Explicit user approval is required before importing personal knowledge." }
         require(id.matches(ID_PATTERN)) { "Document ID is invalid." }
+        require(if (internalBundled) id.startsWith("curriculum_") else !id.startsWith("curriculum_")) {
+            "The curriculum_ document namespace is reserved for signed APK lesson packs."
+        }
         require(title.isNotBlank() && title.length <= 160)
         require(sourceLabel.isNotBlank() && sourceLabel.length <= 200)
         require(sourceUri == null || (sourceUri.length <= 2_048 && isAllowedSourceUri(sourceUri))) {
             "Source URI must be HTTPS or an Android content URI."
         }
         val normalized = content.replace("\u0000", "").trim()
-        require(normalized.isNotEmpty() && normalized.length <= MAX_DOCUMENT_CHARS) {
-            "Imported text must contain 1-$MAX_DOCUMENT_CHARS characters."
+        val documentLimit = if (internalBundled) MAX_BUNDLED_DOCUMENT_CHARS else MAX_DOCUMENT_CHARS
+        require(normalized.isNotEmpty() && normalized.length <= documentLimit) {
+            "Imported text must contain 1-$documentLimit characters."
         }
         val index = readIndex().toMutableSet()
         require(id in index || index.size < MAX_DOCUMENTS) { "Knowledge document limit reached." }
@@ -80,6 +85,33 @@ class LocalKnowledgeDocumentStore(context: Context) {
         index += id
         store.putAll(mapOf(DOC_PREFIX + id to record.toString(), INDEX_KEY to JSONArray(index.sorted()).toString()))
             .getOrThrow()
+    }
+
+    /** Installs a lesson shipped inside the signed APK after checking its SHA-256 digest. */
+    internal fun importBundledCurriculum(
+        id: String,
+        title: String,
+        version: String,
+        sha256: String,
+        content: String
+    ): Result<Unit> = runCatching {
+        require(id.matches(Regex("curriculum_[a-z0-9_]{3,60}")))
+        require(version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
+        require(sha256.matches(Regex("[a-fA-F0-9]{64}")))
+        require(content.isNotBlank() && content.length <= MAX_BUNDLED_DOCUMENT_CHARS)
+        val actual = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(content.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        require(actual.equals(sha256, ignoreCase = true)) { "Bundled curriculum integrity check failed." }
+        importText(
+            consent = true,
+            id = id,
+            title = title,
+            sourceLabel = "Shraddha AI built-in curriculum v$version",
+            sourceUri = null,
+            content = content,
+            internalBundled = true
+        ).getOrThrow()
     }
 
     /**
@@ -405,11 +437,12 @@ class LocalKnowledgeDocumentStore(context: Context) {
         private const val INDEX_KEY = "knowledge_docs_index_v1"
         private const val CLOUD_INDEX_KEY = "knowledge_docs_cloud_index_v1"
         private const val DOC_PREFIX = "knowledge_doc_"
-        private const val MAX_DOCUMENTS = 50
+        private const val MAX_DOCUMENTS = 100
         private const val MAX_DOCUMENT_CHARS = 50_000
+        private const val MAX_BUNDLED_DOCUMENT_CHARS = 100_000
         private const val CHUNK_CHARS = 1_200
         private const val CHUNK_OVERLAP = 160
-        private const val MAX_CHUNKS_PER_DOCUMENT = 60
+        private const val MAX_CHUNKS_PER_DOCUMENT = 100
         private val ID_PATTERN = Regex("[A-Za-z0-9_-]{1,64}")
     }
 }
