@@ -54,4 +54,10 @@ class PcCommandInterpreterTest {
             .map { PcCommandInterpreter.parse(it).getOrThrow().getString("kind") }
         assertTrue(kinds.all { it in setOf("home", "back", "scroll", "open_app", "type", "set_volume") })
     }
+
+    @Test fun parsesAkkpsBrowserCommands() {
+        assertEquals("akkps_open", PcCommandInterpreter.parse("open AKKPS").getOrThrow().getString("kind"))
+        assertEquals("akkps_runner", PcCommandInterpreter.parse("open AKKPS Runner").getOrThrow().getString("kind"))
+        assertEquals("akkps_inspect", PcCommandInterpreter.parse("inspect runner").getOrThrow().getString("kind"))
+    }
 }
