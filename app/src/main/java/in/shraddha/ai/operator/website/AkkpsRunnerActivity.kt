@@ -25,6 +25,10 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
 import java.net.URI
@@ -138,6 +142,7 @@ class AkkpsRunnerActivity : Activity() {
         root.addView(command, LinearLayout.LayoutParams(-1, dp(82)))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actions.addView(action("Farmer Card OCR") { chooseFarmerCardImage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -608,6 +613,63 @@ class AkkpsRunnerActivity : Activity() {
         web.evaluateJavascript(js, null)
     }
 
+    private fun chooseFarmerCardImage() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivityForResult(pick, REQUEST_FARMER_CARD_OCR) }
+            .onFailure { status.text = "Farmer Card image picker उपलब्ध नहीं है।" }
+    }
+
+    /** Hindi + Latin OCR stays on-device; raw card text is never uploaded or persisted. */
+    private fun processFarmerCardImage(uri: Uri) {
+        status.text = "Farmer Card का local OCR चल रहा है…"
+        val input = runCatching { InputImage.fromFilePath(this, uri) }.getOrElse {
+            status.text = "चुनी गई तस्वीर पढ़ी नहीं जा सकी: " + (it.localizedMessage ?: "file error")
+            return
+        }
+        val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        val recognizersClosed = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun closeRecognizers() {
+            if (recognizersClosed.compareAndSet(false, true)) {
+                latin.close()
+                devanagari.close()
+            }
+        }
+        latin.process(input).addOnSuccessListener { latinResult ->
+            if (isFinishing || isDestroyed) {
+                closeRecognizers()
+                return@addOnSuccessListener
+            }
+            devanagari.process(input).addOnSuccessListener { devResult ->
+                closeRecognizers()
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
+                val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devResult.text)
+                if (!parsed.readyForUserReview) {
+                    status.text = "कार्ड से स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या आवाज़ से जानकारी दें।"
+                } else {
+                    command.setText(parsed.toRunnerCommand())
+                    val missing = parsed.missing.joinToString()
+                    val missingText = if (missing.isBlank()) "मुख्य fields मिलीं" else "अभी जानकारी चाहिए: $missing"
+                    status.text = "स्थानीय OCR ने ${parsed.assignments.size} candidate fields पहचाने। $missingText। हर मान जाँचें/सुधारें। कोई field स्वतः submit नहीं हुई।"
+                }
+            }.addOnFailureListener { error ->
+                closeRecognizers()
+                if (!isFinishing && !isDestroyed) {
+                    status.text = "Hindi OCR उपलब्ध नहीं: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+                }
+            }
+        }.addOnFailureListener { error ->
+            closeRecognizers()
+            if (!isFinishing && !isDestroyed) {
+                status.text = "OCR नहीं चल पाया: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+            }
+        }
+    }
+
     private fun inspectPage(onReady: ((JSONObject) -> Unit)? = null) {
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS के सुरक्षित पेज पर जाएँ।"; return
@@ -923,7 +985,11 @@ class AkkpsRunnerActivity : Activity() {
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const allowed=__ALLOWED_TYPES__;
-              const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const forms=[...document.forms].filter(visible);
+              if(forms.length!==1)return JSON.stringify({formError:forms.length?'form_not_unique':'form_not_found',out:[],missing:[]});
+              const form=forms[0],all=[...form.querySelectorAll('input,textarea,select')],out=[],used=new Set();
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
                 (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
@@ -953,15 +1019,18 @@ class AkkpsRunnerActivity : Activity() {
                     .map(norm).some(v=>v && v===key);
                 });
                 if(found.length===0){
-                  const groups=radioGroups(document).filter(g=>{
+                  const groups=radioGroups(form).filter(g=>{
                     const labels=groupLabel(g);
                     return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
                   });
                   if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
+                  const group=groups[0];
+                  if(group.some(r=>used.has(r))){out.push({key:item.key,status:'duplicate_target'});continue;}
                   const wanted=norm(item.value);
-                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  const options=group.filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
                   if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
                   options[0].checked=true;
+                  group.forEach(r=>used.add(r));
                   options[0].dispatchEvent(new Event('input',{bubbles:true}));
                   options[0].dispatchEvent(new Event('change',{bubbles:true}));
                   out.push({key:item.key,status:'filled'});
@@ -969,6 +1038,7 @@ class AkkpsRunnerActivity : Activity() {
                 }
                 if(found.length!==1){out.push({key:item.key,status:'ambiguous'});continue;}
                 const e=found[0];
+                if(used.has(e)){out.push({key:item.key,status:'duplicate_target'});continue;}
                 if(e.tagName==='SELECT'){
                   const wanted=norm(item.value);
                   const options=[...e.options].filter(o=>!o.disabled&&!(o.parentElement&&o.parentElement.disabled)&&
@@ -978,13 +1048,14 @@ class AkkpsRunnerActivity : Activity() {
                 }else{
                   e.value=item.value;
                 }
+                used.add(e);
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
+              const missing=[...form.querySelectorAll('input[required],textarea[required],select[required]')]
                 .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
-              const requiredRadios=radioGroups(document).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
+              const requiredRadios=radioGroups(form).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
               requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
@@ -993,6 +1064,10 @@ class AkkpsRunnerActivity : Activity() {
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
+            if (result.optString("formError").isNotBlank()) {
+                status.text = "एक ही स्पष्ट AKKPS फॉर्म नहीं मिला; डेटा नहीं भरा और Submit नहीं किया।"
+                return@evaluateJavascript
+            }
             val out = result.optJSONArray("out") ?: JSONArray()
             val errors = (0 until out.length()).mapNotNull { i ->
                 out.optJSONObject(i)?.takeIf { it.optString("status") != "filled" }?.let {
@@ -1287,6 +1362,9 @@ Return exact JSON only. Do not include prose or markdown."""
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
         }
+        if (requestCode == REQUEST_FARMER_CARD_OCR && resultCode == RESULT_OK) {
+            data?.data?.let(::processFarmerCardImage)
+        }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
             val content = pendingKml; pendingKml = null
@@ -1409,6 +1487,7 @@ Return exact JSON only. Do not include prose or markdown."""
 
     companion object {
         private const val REQUEST_FILE = 7314
+        private const val REQUEST_FARMER_CARD_OCR = 7320
         private const val REQUEST_LOCATION = 7315
         private const val REQUEST_GPS_WALK = 7316
         private const val REQUEST_KML_EXPORT = 7317
