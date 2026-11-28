@@ -271,7 +271,11 @@ class AkkpsRunnerActivity : Activity() {
     private fun dispatchPendingAiCommand(url: String) {
         val raw = pendingAiCommand ?: return
         val route = AkkpsRunnerRouteCatalog.match(url) ?: return // wait until login reaches Runner
-        val targetModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+        val createIntent = raw.replace(
+            Regex("(?i)(?:submit(?:\\s+now)?|save(?:\\s+record)?|जमा(?:\\s+करें|\\s+करो)?|सबमिट(?:\\s+करें)?|भेजो|भेजें)\\s*$"),
+            ""
+        ).trim()
+        val targetModule = AkkpsRunnerCreateCommandPolicy.resolve(createIntent)
         if (targetModule != null && raw.contains('=') && (route.module != targetModule || !route.isCreateRoute)) {
             val targetRoute = AkkpsRunnerCreateCommandPolicy.route(targetModule) ?: return
             if (route.module != targetModule || route.path != targetRoute) {
