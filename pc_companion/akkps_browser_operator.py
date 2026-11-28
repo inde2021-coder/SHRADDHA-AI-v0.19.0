@@ -58,8 +58,18 @@ def validate_runner_url(url: str) -> str:
     if any(segment in {".", ".."} for segment in path.split("/")):
         raise ValueError("AKKPS path traversal was rejected.")
     normalized = path.rstrip("/") or "/"
-    if normalized not in {"/", "/login", "/auth/login", "/runner"} and not normalized.startswith("/runner/"):
-        raise ValueError("Only the AKKPS login and Runner workspace are allowed.")
+    segments = [part.casefold() for part in normalized.split("/") if part]
+    if any(part in {"admin", "coordinator"} for part in segments):
+        raise ValueError("AKKPS Admin and Coordinator routes are not available to Runner automation.")
+    allowed_runner = normalized == "/runner" or any(
+        normalized == prefix or normalized.startswith(prefix + "/")
+        for prefix in (
+            "/runner/farmers", "/runner/plots", "/runner/awd-reports",
+            "/runner/profile", "/runner/sync"
+        )
+    ) or normalized in {"/plots/new", "/awd-reports/new"}
+    if normalized not in {"/", "/login", "/auth/login"} and not allowed_runner:
+        raise ValueError("Only the AKKPS login and allow-listed Runner modules are allowed.")
     return url
 
 
