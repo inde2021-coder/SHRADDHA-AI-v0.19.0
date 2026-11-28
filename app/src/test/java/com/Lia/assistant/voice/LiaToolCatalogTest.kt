@@ -19,5 +19,6 @@ class LiaToolCatalogTest {
         assertTrue(description.contains("akkps_open"))
         assertTrue(description.contains("akkps_runner"))
         assertTrue(description.contains("akkps_inspect"))
+        assertTrue(description.contains("akkps_module"))
     }
 }
