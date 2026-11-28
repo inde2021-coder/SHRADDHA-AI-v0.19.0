@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 import json
 import re
 
@@ -28,6 +28,23 @@ def validate_akkps_url(url: str) -> str:
         raise ValueError("Only HTTPS pages on the approved AKKPS domains are allowed.")
     if parsed.username or parsed.password:
         raise ValueError("Credentials must not be embedded in a URL.")
+    return url
+
+
+def validate_runner_url(url: str) -> str:
+    """Allow only login/root and Runner routes; reject encoded traversal and admin areas."""
+    validate_akkps_url(url)
+    parsed = urlparse(url)
+    raw_path = parsed.path or "/"
+    if (len(raw_path) > 1024 or "\\" in raw_path or "//" in raw_path
+            or re.search(r"(?i)%2f|%5c|%2e", raw_path)):
+        raise ValueError("Unsafe AKKPS route path was rejected.")
+    path = unquote(raw_path)
+    if any(segment in {".", ".."} for segment in path.split("/")):
+        raise ValueError("AKKPS path traversal was rejected.")
+    normalized = path.rstrip("/") or "/"
+    if normalized not in {"/", "/login", "/auth/login", "/runner"} and not normalized.startswith("/runner/"):
+        raise ValueError("Only the AKKPS login and Runner workspace are allowed.")
     return url
 
 
@@ -70,7 +87,7 @@ class AkkpsBrowserOperator:
         return self._page
 
     def start(self, start_url: str = DEFAULT_HOME):
-        validate_akkps_url(start_url)
+        validate_runner_url(start_url)
         if self._page is not None:
             return self.inventory()
         try:
@@ -100,7 +117,7 @@ class AkkpsBrowserOperator:
         self._context = self._playwright = self._page = None
 
     def navigate(self, url: str):
-        validate_akkps_url(url)
+        validate_runner_url(url)
         self.page.goto(url, wait_until="domcontentloaded", timeout=45000)
         return self.inventory()
 
@@ -141,7 +158,7 @@ class AkkpsBrowserOperator:
               .filter(visible).map(e => clean(e.innerText || e.value || e.getAttribute('aria-label'))).filter(Boolean));
           return {url: location.href, title: document.title, links, fields, buttons, tables, sections, forms};
         }""")
-        validate_akkps_url(data["url"])
+        validate_runner_url(data["url"])
         safe_fields = []
         for item in data["fields"]:
             kind = (item.get("type") or "").lower()
