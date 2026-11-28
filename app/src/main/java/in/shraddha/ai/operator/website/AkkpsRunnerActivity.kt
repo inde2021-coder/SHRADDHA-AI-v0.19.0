@@ -812,7 +812,7 @@ class AkkpsRunnerActivity : Activity() {
                         put(JSONObject().put("label", item.optString("label")).put("path", targetPath))
                     }
                 })
-            runCatching { AkkpsPageInventory.save(this, safeInventory) }
+            if (route != null) runCatching { AkkpsPageInventory.save(this, safeInventory) }
             val capabilities = AkkpsPageCapabilityDiscovery.discover(
                 formCount = forms,
                 tableCount = tables,
