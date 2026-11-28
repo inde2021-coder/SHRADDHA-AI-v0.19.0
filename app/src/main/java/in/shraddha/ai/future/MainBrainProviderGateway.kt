@@ -67,6 +67,8 @@ object MainBrainProviderGateway {
         CouncilCostBudget.requireUsageCountersAvailable(context, "Streaming Gemini generation")
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
+        // Model discovery itself is a cloud request; consent may have changed since entry.
+        OnlineAiConsent.requireAllowed(context)
         val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(context.applicationContext, apiKey) }
         val modelEndpoint = if (model.startsWith("models/")) model else "models/$model"
         val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:streamGenerateContent?alt=sse"
@@ -83,6 +85,8 @@ object MainBrainProviderGateway {
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
+        // Re-check at the transport boundary so revocation during model discovery blocks dispatch.
+        OnlineAiConsent.requireAllowed(context)
         val call = GeminiTextClient.internalHttpClient.newCall(request)
         call.execute().use { response ->
             if (!response.isSuccessful) return StreamingTextResult(response.code, "", null)
@@ -151,6 +155,8 @@ object MainBrainProviderGateway {
             return ChatReplyResult.Success(cloud.text, usage)
         }
         // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
+        // Consent is checked again after gateway discovery and immediately before any direct provider call.
+        OnlineAiConsent.requireAllowed(context)
         val directResult = if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
                 return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
