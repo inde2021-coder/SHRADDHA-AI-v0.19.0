@@ -15,7 +15,7 @@ class AkkpsPageInventoryTest {
             .put("actions", JSONArray().put(JSONObject().put("label", "Create")))
             .put("forms", JSONArray().put(JSONObject().put("index", 0)))
             .put("tables", JSONArray().put(JSONObject().put("index", 0)))
-            .put("fields", JSONArray()
+            .put("fieldLabels", JSONArray()
                 .put(JSONObject().put("label", "Farmer Name").put("required", true))
                 .put(JSONObject().put("label", "Village").put("required", false)))
 
