@@ -28,6 +28,12 @@ def parse_android_command(raw):
     if len(command) > 500:
         raise ValueError("Command is too long.")
     lower = command.casefold()
+    if lower in {"open akkps", "open terramark", "akkps खोलो", "टेरामार्क खोलो"}:
+        return {"kind": "akkps_open"}
+    if lower in {"open akkps runner", "akkps runner खोलो", "runner खोलो"}:
+        return {"kind": "akkps_runner"}
+    if lower in {"inspect akkps", "inspect runner", "akkps जांचो", "runner जांचो"}:
+        return {"kind": "akkps_inspect"}
     if lower in {"home", "होम", "home screen"}:
         return {"kind": "home"}
     if lower in {"back", "go back", "वापस", "पीछे जाओ"}:
